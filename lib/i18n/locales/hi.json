@@ -1,0 +1,76 @@
+{
+  "common": {
+    "loading": "लोड हो रहा है...",
+    "error": "त्रुटि",
+    "success": "सफलता",
+    "cancel": "रद्द करें",
+    "confirm": "पुष्टि करें",
+    "save": "सेव करें",
+    "delete": "हटाएं",
+    "edit": "संपादित करें",
+    "view": "देखें",
+    "back": "वापस",
+    "next": "अगला",
+    "previous": "पिछला",
+    "search": "खोजें",
+    "filter": "फिल्टर",
+    "export": "निर्यात",
+    "import": "आयात"
+  },
+  "navigation": {
+    "home": "होम",
+    "digitalId": "डिजिटल आईडी",
+    "tracking": "लाइव ट्रैकिंग",
+    "safetyScore": "सुरक्षा स्कोर",
+    "emergency": "आपातकाल",
+    "authority": "प्राधिकरण डैशबोर्ड",
+    "profile": "प्रोफाइल",
+    "settings": "सेटिंग्स",
+    "logout": "लॉगआउट"
+  },
+  "digitalId": {
+    "title": "डिजिटल पर्यटक आईडी जेनरेटर",
+    "subtitle": "अपनी यात्रा के लिए एक सुरक्षित, ब्लॉकचेन-सत्यापित डिजिटल पहचान बनाएं",
+    "form": {
+      "aadhaarNumber": "आधार संख्या",
+      "passportNumber": "पासपोर्ट संख्या",
+      "emergencyContactName": "आपातकालीन संपर्क नाम",
+      "emergencyContactPhone": "आपातकालीन संपर्क फोन",
+      "tripStartDate": "यात्रा प्रारंभ तिथि",
+      "tripEndDate": "यात्रा समाप्ति तिथि",
+      "generate": "डिजिटल आईडी जेनरेट करें"
+    },
+    "success": "डिजिटल आईडी सफलतापूर्वक जेनरेट की गई",
+    "qrCode": "आपका डिजिटल आईडी QR कोड",
+    "download": "QR कोड डाउनलोड करें"
+  },
+  "tracking": {
+    "title": "लाइव लोकेशन ट्रैकिंग",
+    "subtitle": "जियो-फेंस अलर्ट के साथ रियल-टाइम लोकेशन मॉनिटरिंग",
+    "enableLocation": "लोकेशन ट्रैकिंग सक्षम करें",
+    "locationEnabled": "लोकेशन ट्रैकिंग सक्रिय है",
+    "locationDisabled": "लोकेशन ट्रैकिंग निष्क्रिय है",
+    "currentLocation": "वर्तमान स्थान",
+    "safeZone": "सुरक्षित क्षेत्र",
+    "highRiskZone": "उच्च जोखिम क्षेत्र",
+    "restrictedZone": "प्रतिबंधित क्षेत्र",
+    "touristSpot": "पर्यटन स्थल"
+  },
+  "emergency": {
+    "title": "आपातकालीन अलर्ट सिस्टम",
+    "panicButton": "पैनिक बटन",
+    "panicButtonSubtext": "3 सेकंड के लिए दबाकर रखें",
+    "alertSent": "आपातकालीन अलर्ट सफलतापूर्वक भेजा गया",
+    "alertFailed": "आपातकालीन अलर्ट भेजने में विफल",
+    "voiceEmergency": "आवाज आपातकाल",
+    "textEmergency": "टेक्स्ट आपातकाल",
+    "speakNow": "अब बोलें...",
+    "listening": "सुन रहा है...",
+    "emergencyContacts": "आपातकालीन संपर्क",
+    "nearbyPolice": "नजदीकी पुलिस स्टेशन",
+    "medicalEmergency": "चिकित्सा आपातकाल",
+    "securityThreat": "सुरक्षा खतरा",
+    "naturalDisaster": "प्राकृतिक आपदा",
+    "other": "अन्य आपातकाल"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "common": {
+    "loading": "লোড হৈ আছে...",
+    "error": "ভুল",
+    "success": "সফলতা",
+    "cancel": "বাতিল কৰক",
+    "confirm": "নিশ্চিত কৰক",
+    "save": "সংৰক্ষণ কৰক",
+    "delete": "মচক",
+    "edit": "সম্পাদনা কৰক",
+    "view": "চাওক",
+    "back": "পিছলৈ",
+    "next": "পৰৱৰ্তী",
+    "previous": "পূৰ্বৱৰ্তী"
+  },
+  "navigation": {
+    "home": "ঘৰ",
+    "digitalId": "ডিজিটেল আইডি",
+    "tracking": "লাইভ ট্ৰেকিং",
+    "safetyScore": "সুৰক্ষা স্ক'ৰ",
+    "emergency": "জৰুৰীকালীন",
+    "authority": "কৰ্তৃপক্ষৰ ডেছব'ৰ্ড",
+    "profile": "প্ৰ'ফাইল",
+    "settings": "ছেটিংছ",
+    "logout": "লগআউট"
+  },
+  "digitalId": {
+    "title": "ডিজিটেল পৰ্যটক আইডি জেনেৰেটৰ",
+    "subtitle": "আপোনাৰ ভ্ৰমণৰ বাবে এটা সুৰক্ষিত, ব্লকচেইন-সত্যাপিত ডিজিটেল পৰিচয় সৃষ্টি কৰক"
+  },
+  "emergency": {
+    "title": "জৰুৰীকালীন সতৰ্কতা ব্যৱস্থা",
+    "panicButton": "পেনিক বুটাম",
+    "panicButtonSubtext": "৩ ছেকেণ্ডৰ বাবে টিপি ৰাখক",
+    "voiceEmergency": "কণ্ঠস্বৰ জৰুৰীকালীন",
+    "textEmergency": "পাঠ জৰুৰীকালীন",
+    "medicalEmergency": "চিকিৎসা জৰুৰীকালীন",
+    "securityThreat": "সুৰক্ষা ভাবুকি"
+  }
+}

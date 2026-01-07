@@ -1,0 +1,117 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "import": "Import"
+  },
+  "navigation": {
+    "home": "Home",
+    "digitalId": "Digital ID",
+    "tracking": "Live Tracking",
+    "safetyScore": "Safety Score",
+    "emergency": "Emergency",
+    "authority": "Authority Dashboard",
+    "profile": "Profile",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "digitalId": {
+    "title": "Digital Tourist ID Generator",
+    "subtitle": "Create a secure, blockchain-verified digital identity for your trip",
+    "form": {
+      "aadhaarNumber": "Aadhaar Number",
+      "passportNumber": "Passport Number",
+      "emergencyContactName": "Emergency Contact Name",
+      "emergencyContactPhone": "Emergency Contact Phone",
+      "tripStartDate": "Trip Start Date",
+      "tripEndDate": "Trip End Date",
+      "generate": "Generate Digital ID"
+    },
+    "success": "Digital ID generated successfully",
+    "qrCode": "Your Digital ID QR Code",
+    "download": "Download QR Code"
+  },
+  "tracking": {
+    "title": "Live Location Tracking",
+    "subtitle": "Real-time location monitoring with geo-fence alerts",
+    "enableLocation": "Enable Location Tracking",
+    "locationEnabled": "Location tracking is active",
+    "locationDisabled": "Location tracking is disabled",
+    "currentLocation": "Current Location",
+    "safeZone": "Safe Zone",
+    "highRiskZone": "High Risk Zone",
+    "restrictedZone": "Restricted Zone",
+    "touristSpot": "Tourist Spot"
+  },
+  "safetyScore": {
+    "title": "AI Safety Score Analysis",
+    "subtitle": "Advanced AI-powered safety assessment",
+    "currentScore": "Current Safety Score",
+    "riskLevel": "Risk Level",
+    "factors": {
+      "routeSafety": "Route Safety",
+      "riskExposure": "Risk Exposure",
+      "alertFrequency": "Alert Frequency",
+      "behaviorPattern": "Behavior Pattern"
+    },
+    "recommendations": "Safety Recommendations",
+    "lastUpdated": "Last Updated"
+  },
+  "emergency": {
+    "title": "Emergency Alert System",
+    "panicButton": "PANIC BUTTON",
+    "panicButtonSubtext": "Press and hold for 3 seconds",
+    "alertSent": "Emergency alert sent successfully",
+    "alertFailed": "Failed to send emergency alert",
+    "voiceEmergency": "Voice Emergency",
+    "textEmergency": "Text Emergency",
+    "speakNow": "Speak now...",
+    "listening": "Listening...",
+    "emergencyContacts": "Emergency Contacts",
+    "nearbyPolice": "Nearby Police Stations",
+    "medicalEmergency": "Medical Emergency",
+    "securityThreat": "Security Threat",
+    "naturalDisaster": "Natural Disaster",
+    "other": "Other Emergency"
+  },
+  "authority": {
+    "title": "Authority Command Center",
+    "subtitle": "Real-time monitoring dashboard",
+    "activeTourists": "Active Tourists",
+    "activeAlerts": "Active Alerts",
+    "criticalAlerts": "Critical Alerts",
+    "recentEFIRs": "Recent E-FIRs",
+    "touristHeatmap": "Tourist Heatmap",
+    "alertManagement": "Alert Management",
+    "generateEFIR": "Generate E-FIR",
+    "assignOfficer": "Assign Officer",
+    "resolveAlert": "Resolve Alert",
+    "safetyStatistics": "Safety Statistics"
+  },
+  "alerts": {
+    "geoFence": "Geo-fence Alert",
+    "panic": "Panic Alert",
+    "anomaly": "Anomaly Detected",
+    "missing": "Missing Person",
+    "medical": "Medical Emergency",
+    "severity": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical"
+    }
+  }
+}
