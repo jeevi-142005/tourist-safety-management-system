@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!)
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!);
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,68 +25,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    //p the AI Safety Score & Anomaly Detection system using Gemini AI:
-
-<CodeProject id="touristsafetywebsite" taskNameActive="Building AI safety system" taskNameComplete="Built AI safety system">
-
-\`\`\`typescript file="app/api/ai/safety-score/route.ts"
-import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!);
-
-export async function POST(request: NextRequest) {\
-  try {\
-    const cookieStore = cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {\
-        cookies: {\
-          get(name: string) {\
-            return cookieStore.get(name)?.value;
-          },
-        },
-      }
-    );
-\
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {\
-      return NextResponse.json({ error: 'Unauthorized\' }, { status: 401 });
-    }
-
-    // Get user's location history\
     const { data: locationHistory } = await supabase
       .from('location_tracks')
       .select('*')
       .eq('user_id', user.id)
-      .order('timestamp\', { ascending: false })
+      .order('timestamp', { ascending: false })
       .limit(100);
 
-    // Get user's alert history\
     const { data: alertHistory } = await supabase
       .from('alerts')
       .select('*')
       .eq('user_id', user.id)
-      .order('created_at\', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(50);
 
-    // Get geo zones for context\
     const { data: geoZones } = await supabase
       .from('geo_zones')
       .select('*');
 
-    // Prepare data for AI analysis
-    const analysisData = {\
+    const analysisData = {
       locationHistory: locationHistory?.slice(0, 20) || [],
       alertHistory: alertHistory?.slice(0, 10) || [],
       geoZones: geoZones || [],
       timeframe: '7 days'
     };
 
-    // Use Gemini AI to calculate safety score\
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
     
     const prompt = `
@@ -109,11 +72,11 @@ export async function POST(request: NextRequest) {\
     5. Overall risk exposure
 
     Return a JSON response with:
-    {\
-      "safetyScore\": number (0-100),
+    {
+      "safetyScore": number (0-100),
       "riskLevel": "low" | "medium" | "high" | "critical",
-      "factors": {\
-        "routeSafety\": number,
+      "factors": {
+        "routeSafety": number,
         "riskExposure": number,
         "alertFrequency": number,
         "behaviorPattern": number
@@ -127,19 +90,16 @@ export async function POST(request: NextRequest) {\
     const response = await result.response;
     const analysisText = response.text();
 
-    // Parse AI response
     let aiAnalysis;
-    try {\
+    try {
       aiAnalysis = JSON.parse(analysisText);
     } catch (error) {
-      // Fallback calculation if AI response is not valid JSON\
       aiAnalysis = calculateFallbackSafetyScore(analysisData);
     }
 
-    // Store safety score in database\
     const { data: safetyScore, error } = await supabase
       .from('safety_scores')
-      .insert({\
+      .insert({
         user_id: user.id,
         score: aiAnalysis.safetyScore,
         factors: aiAnalysis.factors
@@ -147,11 +107,11 @@ export async function POST(request: NextRequest) {\
       .select()
       .single();
 
-    if (error) {\
-      console.error('Safety score storage error:\', error);
+    if (error) {
+      console.error('Safety score storage error:', error);
     }
 
-    return NextResponse.json({\
+    return NextResponse.json({
       safetyScore: aiAnalysis.safetyScore,
       riskLevel: aiAnalysis.riskLevel,
       factors: aiAnalysis.factors,
@@ -160,20 +120,18 @@ export async function POST(request: NextRequest) {\
       lastUpdated: new Date().toISOString()
     });
 
-  } catch (error) {\
-    console.error('Safety score calculation error:\', error);\
-    return NextResponse.json({ error: 'Failed to calculate safety score\' }, { status: 500 });
+  } catch (error) {
+    console.error('Safety score calculation error:', error);
+    return NextResponse.json({ error: 'Failed to calculate safety score' }, { status: 500 });
   }
 }
 
 function calculateFallbackSafetyScore(data: any) {
   let baseScore = 100;
   
-  // Reduce score based on alerts
   const alertPenalty = Math.min(data.alertHistory.length * 5, 30);
   baseScore -= alertPenalty;
   
-  // Reduce score based on high-risk area visits
   const highRiskVisits = data.locationHistory.filter((loc: any) => 
     data.geoZones.some((zone: any) => zone.zone_type === 'high_risk')
   ).length;
