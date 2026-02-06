@@ -10,18 +10,18 @@ const TOURIST_ID_ABI = [
 ]
 
 class BlockchainClient {
-  private provider: ethers.JsonRpcProvider
-  private contract: ethers.Contract
-  private wallet: ethers.Wallet
+  private provider: ethers.JsonRpcProvider | null = null
+  private contract: ethers.Contract | null = null
+  private wallet: ethers.Wallet | null = null
 
-  constructor() {
-    // Use Polygon Mumbai testnet for development
+  private initialize() {
+    if (this.provider) return
+
     this.provider = new ethers.JsonRpcProvider(process.env.POLYGON_RPC_URL || "https://rpc-mumbai.maticvigil.com")
 
-    // Create wallet from private key (in production, use secure key management)
-    this.wallet = new ethers.Wallet(process.env.BLOCKCHAIN_PRIVATE_KEY || "0x" + "0".repeat(64), this.provider)
+    const privateKey = process.env.BLOCKCHAIN_PRIVATE_KEY || ethers.Wallet.createRandom().privateKey
+    this.wallet = new ethers.Wallet(privateKey, this.provider)
 
-    // Initialize contract (deploy address would be set after deployment)
     this.contract = new ethers.Contract(
       process.env.TOURIST_ID_CONTRACT_ADDRESS || "0x0000000000000000000000000000000000000000",
       TOURIST_ID_ABI,
@@ -35,6 +35,7 @@ class BlockchainClient {
     passportHash: string
     validUntil: Date
   }): Promise<{ tokenId: string; transactionHash: string }> {
+    this.initialize()
     try {
       // Create hash of ID data
       const idHash = ethers.keccak256(
@@ -52,7 +53,7 @@ class BlockchainClient {
       const validUntilTimestamp = Math.floor(idData.validUntil.getTime() / 1000)
 
       // Create transaction
-      const tx = await this.contract.createTouristID(idHash, validUntilTimestamp)
+      const tx = await this.contract!.createTouristID(idHash, validUntilTimestamp)
       const receipt = await tx.wait()
 
       // Extract token ID from event logs
@@ -77,8 +78,9 @@ class BlockchainClient {
     validUntil: number
     isActive: boolean
   }> {
+    this.initialize()
     try {
-      const [idHash, validUntil, isActive] = await this.contract.getTouristID(tokenId)
+      const [idHash, validUntil, isActive] = await this.contract!.getTouristID(tokenId)
       return {
         idHash,
         validUntil: Number(validUntil),
@@ -91,8 +93,9 @@ class BlockchainClient {
   }
 
   async deactivateDigitalID(tokenId: string): Promise<string> {
+    this.initialize()
     try {
-      const tx = await this.contract.deactivateTouristID(tokenId)
+      const tx = await this.contract!.deactivateTouristID(tokenId)
       const receipt = await tx.wait()
       return receipt.hash
     } catch (error) {
@@ -107,14 +110,15 @@ class BlockchainClient {
     location: { lat: number; lng: number }
     timestamp: Date
   }): Promise<string> {
+    this.initialize()
     try {
       // Create immutable log entry on blockchain
       const logHash = ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(alertData)))
 
       // In a real implementation, this would call a logging contract
       // For now, we'll simulate with a transaction
-      const tx = await this.wallet.sendTransaction({
-        to: this.wallet.address,
+      const tx = await this.wallet!.sendTransaction({
+        to: this.wallet!.address,
         value: 0,
         data: logHash,
       })

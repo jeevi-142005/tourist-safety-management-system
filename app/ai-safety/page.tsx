@@ -1,5 +1,7 @@
 import { GeminiAISafetyDashboard } from "@/components/gemini-ai-safety-dashboard"
 
+export const dynamic = 'force-dynamic'
+
 export default function AISafetyPage() {
   return (
     <div className="container mx-auto px-4 py-8">

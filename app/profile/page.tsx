@@ -12,6 +12,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { NavigationMenu } from "@/components/navigation-menu"
 import { User, Phone, Shield, Save, Loader2 } from "lucide-react"
 
+export const dynamic = 'force-dynamic'
+
 interface Profile {
   id: string
   email: string

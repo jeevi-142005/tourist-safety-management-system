@@ -4,7 +4,7 @@ import { cookies } from "next/headers"
 import { blockchainClient } from "@/lib/blockchain/client"
 import { encryptionService } from "@/lib/crypto/encryption"
 import QRCode from "qrcode"
-import { crypto } from "crypto"
+import { randomUUID } from "crypto"
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     // Generate QR code data
     const qrData = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       userId: user.id,
       tokenId: blockchainResult.tokenId,
       validUntil: tripEndDate,

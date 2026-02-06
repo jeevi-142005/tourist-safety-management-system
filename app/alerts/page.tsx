@@ -7,6 +7,9 @@ import { NotificationSystem } from "@/components/notification-system"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertTriangle, Shield, Bell, Zap } from "lucide-react"
+import dynamic from "next/dynamic"
+
+export const dynamic = 'force-dynamic'
 
 export default function AlertsPage() {
   return (

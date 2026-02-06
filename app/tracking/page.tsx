@@ -1,6 +1,8 @@
 import { NavigationMenu } from "@/components/navigation-menu"
 import { LiveTrackingMap } from "@/components/live-tracking-map"
 
+export const dynamic = 'force-dynamic'
+
 export default function TrackingPage() {
   return (
     <div className="min-h-screen bg-background">

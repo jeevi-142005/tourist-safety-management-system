@@ -24,6 +24,8 @@ import {
   Brain,
 } from "lucide-react"
 
+export const dynamic = 'force-dynamic'
+
 interface Tourist {
   id: string
   full_name: string

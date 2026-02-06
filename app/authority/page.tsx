@@ -1,5 +1,7 @@
 import { AuthorityDashboard } from "@/components/authority-dashboard"
 
+export const dynamic = 'force-dynamic'
+
 export default function AuthorityPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-100 py-12 px-4">

@@ -3,9 +3,10 @@ import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { blockchainClient } from "@/lib/blockchain/client"
 
-export async function GET(request: NextRequest, { params }: { params: { tokenId: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ tokenId: string }> }) {
   try {
-    const cookieStore = cookies()
+    const params = await props.params;
+    const cookieStore = await cookies()
     const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
       cookies: {
         get(name: string) {
