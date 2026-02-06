@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { createClient } from "@/lib/supabase/server"
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!)
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "mock-key")
 
 interface DeviceMetrics {
   battery_level: number
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const body: AnomalyDetectionRequest = await request.json()
     const { user_id, device_metrics, location, timestamp } = body
 
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Get user's historical data for pattern analysis
     const { data: historicalAlerts } = await supabase

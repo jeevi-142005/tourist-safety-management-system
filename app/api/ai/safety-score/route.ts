@@ -3,11 +3,11 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!);
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "mock-key");
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     };
 
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-    
+
     const prompt = `
     Analyze the following tourist safety data and calculate a safety score (0-100) with detailed reasoning:
 
@@ -128,18 +128,18 @@ export async function POST(request: NextRequest) {
 
 function calculateFallbackSafetyScore(data: any) {
   let baseScore = 100;
-  
+
   const alertPenalty = Math.min(data.alertHistory.length * 5, 30);
   baseScore -= alertPenalty;
-  
-  const highRiskVisits = data.locationHistory.filter((loc: any) => 
+
+  const highRiskVisits = data.locationHistory.filter((loc: any) =>
     data.geoZones.some((zone: any) => zone.zone_type === 'high_risk')
   ).length;
   const riskPenalty = Math.min(highRiskVisits * 2, 20);
   baseScore -= riskPenalty;
-  
+
   const finalScore = Math.max(0, baseScore);
-  
+
   return {
     safetyScore: finalScore,
     riskLevel: finalScore > 80 ? 'low' : finalScore > 60 ? 'medium' : finalScore > 40 ? 'high' : 'critical',

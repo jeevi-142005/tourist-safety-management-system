@@ -1,12 +1,11 @@
 import { createClient } from "@supabase/supabase-js"
 
 export function createBrowserClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://mock.supabase.co"
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "mock-key"
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn("[v0] Missing Supabase environment variables, using demo mode")
-    return null
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    console.warn("Missing Supabase environment variables, using mock client")
   }
 
   try {
