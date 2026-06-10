@@ -28,14 +28,14 @@ export async function POST(request: NextRequest) {
     const dbClient = await createClient()
 
     // Get user's historical data for pattern analysis
-    const { data: historicalAlerts } = await Database
+    const { data: historicalAlerts } = await dbClient
       .from("alerts")
       .select("*")
       .eq("tourist_id", user_id)
       .order("created_at", { ascending: false })
       .limit(50)
 
-    const { data: historicalMetrics } = await Database
+    const { data: historicalMetrics } = await dbClient
       .from("device_metrics")
       .select("*")
       .eq("user_id", user_id)
