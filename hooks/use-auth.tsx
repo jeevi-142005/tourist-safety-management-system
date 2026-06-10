@@ -2,7 +2,12 @@
 
 import type React from "react"
 import { useEffect, useState, createContext, useContext } from "react"
-import { createBrowserClient } from "@/lib/supabase/client"
+import { 
+  SessionProvider, 
+  useSession, 
+  signIn as nextAuthSignIn, 
+  signOut as nextAuthSignOut 
+} from "next-auth/react"
 
 interface AuthUser {
   id: string
@@ -22,174 +27,80 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const DEMO_USERS = {
-  "tourist@demo.com": { id: "demo-tourist", email: "tourist@demo.com", role: "tourist", password: "password123" },
-  "admin@demo.com": { id: "demo-admin", email: "admin@demo.com", role: "admin", password: "password123" },
-}
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
+  const { data: session, status } = useSession()
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
-  const [supabase] = useState(() => createBrowserClient())
 
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        // Check for stored demo user
-        const storedUser = localStorage.getItem("demo-user")
-        if (storedUser) {
-          setUser(JSON.parse(storedUser))
-          setLoading(false)
-          return
-        }
-
-        if (supabase) {
-          console.log("[v0] Checking Supabase session...")
-          const {
-            data: { user: supabaseUser },
-          } = await supabase.auth.getUser()
-
-          if (supabaseUser) {
-            setUser({
-              id: supabaseUser.id,
-              email: supabaseUser.email || "",
-              role: supabaseUser.user_metadata?.role || "tourist",
-            })
-          }
-        }
-      } catch (error) {
-        console.log("[v0] Auth initialization error, using demo mode:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    initAuth()
-
-    let subscription: any
-    if (supabase) {
-      try {
-        const {
-          data: { subscription: authSubscription },
-        } = supabase.auth.onAuthStateChange(async (event, session) => {
-          console.log("[v0] Auth state change:", { event, hasSession: !!session })
-
-          if (session?.user) {
-            const authUser = {
-              id: session.user.id,
-              email: session.user.email || "",
-              role: session.user.user_metadata?.role || "tourist",
-            }
-            setUser(authUser)
-            localStorage.removeItem("demo-user") // Clear demo user if real auth works
-          } else {
-            setUser(null)
-            localStorage.removeItem("demo-user")
-          }
-          setLoading(false)
+    if (status === "loading") {
+      setLoading(true)
+    } else {
+      if (session?.user) {
+        setUser({
+          id: (session.user as any).id || "",
+          email: session.user.email || "",
+          role: (session.user as any).role || "tourist",
         })
-        subscription = authSubscription
-      } catch (error) {
-        console.log("[v0] Auth subscription error:", error)
+      } else {
+        setUser(null)
       }
+      setLoading(false)
+    }
+  }, [session, status])
+
+  const signIn = async (email: string, password: string, role?: string) => {
+    console.log("[NextAuth] Attempting sign in with:", { email, role })
+    
+    const res = await nextAuthSignIn("credentials", {
+      redirect: false,
+      email,
+      password,
+      role,
+    })
+
+    if (res?.error) {
+      throw new Error(res.error || "Invalid login credentials")
     }
 
-    return () => {
-      if (subscription) {
-        subscription.unsubscribe()
-      }
-    }
-  }, [supabase])
-
-  const signIn = async (email: string, password: string) => {
-    console.log("[v0] Attempting sign in with:", { email })
-
-    const demoUser = DEMO_USERS[email as keyof typeof DEMO_USERS]
-    if (demoUser && demoUser.password === password) {
-      const authUser = { id: demoUser.id, email: demoUser.email, role: demoUser.role }
-      setUser(authUser)
-      localStorage.setItem("demo-user", JSON.stringify(authUser))
-      console.log("[v0] Demo sign in successful")
-      return
-    }
-
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-
-        if (error) {
-          throw new Error(error.message)
-        }
-
-        if (data?.user) {
-          const authUser = {
-            id: data.user.id,
-            email: data.user.email || "",
-            role: data.user.user_metadata?.role || "tourist",
-          }
-          setUser(authUser)
-          localStorage.removeItem("demo-user")
-          console.log("[v0] Supabase sign in successful")
-          return
-        }
-      } catch (error) {
-        console.log("[v0] Supabase sign in failed:", error)
-      }
-    }
-
-    throw new Error("Invalid login credentials")
-  }
-
-  const signUp = async (email: string, password: string, role: "tourist" | "admin") => {
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              role,
-              full_name: email.split("@")[0],
-            },
-          },
-        })
-
-        if (error) {
-          throw new Error(error.message)
-        }
-
-        console.log("[v0] Signup successful")
-        return
-      } catch (error) {
-        console.log("[v0] Supabase signup failed:", error)
-      }
-    }
-
-    console.log("[v0] Demo signup successful")
-    alert("Demo signup successful! Use demo credentials to login.")
-  }
-
-  const login = async (email: string, password: string, role: "tourist" | "admin") => {
-    return signIn(email, password)
+    console.log("[NextAuth] Sign in successful")
   }
 
   const register = async (email: string, password: string, name: string, role: "tourist" | "admin") => {
-    return signUp(email, password, role)
+    console.log("[NextAuth] Attempting registration with:", { email, name, role })
+    
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, name, role }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      throw new Error(data.error || "Registration failed")
+    }
+
+    console.log("[NextAuth] Registration successful, logging in...")
+    
+    // Automatically sign in the user after successful registration
+    await signIn(email, password, role)
+  }
+
+  const signUp = async (email: string, password: string, role: "tourist" | "admin") => {
+    return register(email, password, email.split("@")[0], role)
+  }
+
+  const login = async (email: string, password: string, role: "tourist" | "admin") => {
+    return signIn(email, password, role)
   }
 
   const signOut = async () => {
     try {
-      if (supabase) {
-        await supabase.auth.signOut()
-      }
-      localStorage.removeItem("demo-user")
-      setUser(null)
-      console.log("[v0] Sign out successful")
+      await nextAuthSignOut({ redirect: false })
+      console.log("[NextAuth] Sign out successful")
     } catch (error) {
-      console.error("[v0] Sign out error:", error)
+      console.error("[NextAuth] Sign out error:", error)
     }
   }
 
@@ -197,6 +108,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{ user, loading, signOut, signIn, signUp, login, register }}>
       {children}
     </AuthContext.Provider>
+  )
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <SessionProvider>
+      <AuthContextSubProvider>{children}</AuthContextSubProvider>
+    </SessionProvider>
   )
 }
 

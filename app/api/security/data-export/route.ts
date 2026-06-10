@@ -1,26 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { db } from "@/lib/db"
 import { auditLogger, AUDIT_ACTIONS } from "@/lib/security/audit-logger"
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const currentUser = session.user as any
     const body = await request.json()
     const { dataType, userId, reason, legalBasis } = body
 
@@ -29,18 +20,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Check permissions
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+    // Fetch user details
+    const profile = await db.user.findUnique({
+      where: { id: currentUser.id }
+    })
 
-    const canExportOwnData = userId === user.id
+    const canExportOwnData = userId === currentUser.id
     const canExportAnyData = profile?.role && ["admin", "police", "tourism_dept"].includes(profile.role)
 
     if (!canExportOwnData && !canExportAnyData) {
       await auditLogger.log({
-        userId: user.id,
+        userId: currentUser.id,
         action: AUDIT_ACTIONS.PERMISSION_DENIED,
         resource: "data_export",
-        ipAddress: request.ip,
+        ipAddress: request.headers.get("x-forwarded-for") || undefined,
         userAgent: request.headers.get("user-agent") || undefined,
         success: false,
         riskLevel: "high",
@@ -51,69 +44,113 @@ export async function POST(request: NextRequest) {
     }
 
     // Log data access request
-    await supabase.from("data_access_logs").insert({
-      user_id: userId,
-      accessed_by: user.id,
-      data_type: dataType,
-      access_reason: reason,
-      legal_basis: legalBasis,
-      retention_period: "7 days",
+    await db.dataAccessLog.create({
+      data: {
+        userId,
+        accessedBy: currentUser.id,
+        dataType,
+        accessReason: reason,
+        legalBasis,
+        retentionPeriod: "7 days",
+      }
     })
 
     // Export data based on type
     let exportData: any = {}
 
     switch (dataType) {
-      case "profile":
-        const { data: profileData } = await supabase.from("profiles").select("*").eq("id", userId).single()
-        exportData.profile = profileData
-        break
-
-      case "location_history":
-        const { data: locationData } = await supabase
-          .from("location_tracks")
-          .select("*")
-          .eq("user_id", userId)
-          .order("timestamp", { ascending: false })
-          .limit(1000)
-        exportData.locationHistory = locationData
-        break
-
-      case "alerts":
-        const { data: alertsData } = await supabase
-          .from("alerts")
-          .select("*")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-        exportData.alerts = alertsData
-        break
-
-      case "digital_ids":
-        const { data: digitalIdsData } = await supabase.from("digital_tourist_ids").select("*").eq("user_id", userId)
-        exportData.digitalIds = digitalIdsData
-        break
-
-      case "all":
-        // Export all user data
-        const [profileRes, locationRes, alertsRes, digitalIdsRes] = await Promise.all([
-          supabase.from("profiles").select("*").eq("id", userId).single(),
-          supabase
-            .from("location_tracks")
-            .select("*")
-            .eq("user_id", userId)
-            .order("timestamp", { ascending: false })
-            .limit(1000),
-          supabase.from("alerts").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
-          supabase.from("digital_tourist_ids").select("*").eq("user_id", userId),
-        ])
-
-        exportData = {
-          profile: profileRes.data,
-          locationHistory: locationRes.data,
-          alerts: alertsRes.data,
-          digitalIds: digitalIdsRes.data,
+      case "profile": {
+        const profileData = await db.user.findUnique({
+          where: { id: userId }
+        })
+        if (profileData) {
+          const { passwordHash, ...safeProfile } = profileData
+          exportData.profile = safeProfile
+        } else {
+          exportData.profile = null
         }
         break
+      }
+
+      case "location_history": {
+        const locationData = await db.locationTrack.findMany({
+          where: { userId },
+          orderBy: { timestamp: "desc" },
+          take: 1000,
+        })
+        exportData.locationHistory = locationData
+        break
+      }
+
+      case "alerts": {
+        const alertsData = await db.adminNotification.findMany({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+        })
+        exportData.alerts = alertsData
+        break
+      }
+
+      case "digital_ids": {
+        const profileData = await db.user.findUnique({
+          where: { id: userId },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            blockchainId: true,
+            qrCodeData: true,
+            createdAt: true,
+          }
+        })
+        exportData.digitalIds = profileData ? [profileData] : []
+        break
+      }
+
+      case "all": {
+        // Export all user data in parallel
+        const [profileData, locationData, alertsData] = await Promise.all([
+          db.user.findUnique({ where: { id: userId } }),
+          db.locationTrack.findMany({
+            where: { userId },
+            orderBy: { timestamp: "desc" },
+            take: 1000,
+          }),
+          db.adminNotification.findMany({
+            where: { userId },
+            orderBy: { createdAt: "desc" },
+          }),
+        ])
+
+        const safeProfile = profileData ? {
+          id: profileData.id,
+          name: profileData.name,
+          email: profileData.email,
+          phone: profileData.phone,
+          emergencyContact: profileData.emergencyContact,
+          emergencyPhone: profileData.emergencyPhone,
+          role: profileData.role,
+          blockchainId: profileData.blockchainId,
+          qrCodeData: profileData.qrCodeData,
+          createdAt: profileData.createdAt,
+          updatedAt: profileData.updatedAt,
+        } : null
+
+        exportData = {
+          profile: safeProfile,
+          locationHistory: locationData,
+          alerts: alertsData,
+          digitalIds: profileData ? [{
+            id: profileData.id,
+            name: profileData.name,
+            email: profileData.email,
+            blockchainId: profileData.blockchainId,
+            qrCodeData: profileData.qrCodeData,
+            createdAt: profileData.createdAt,
+          }] : [],
+        }
+        break
+      }
 
       default:
         return NextResponse.json({ error: "Invalid data type" }, { status: 400 })
@@ -121,10 +158,10 @@ export async function POST(request: NextRequest) {
 
     // Log successful data export
     await auditLogger.log({
-      userId: user.id,
+      userId: currentUser.id,
       action: AUDIT_ACTIONS.DATA_EXPORT,
       resource: dataType,
-      ipAddress: request.ip,
+      ipAddress: request.headers.get("x-forwarded-for") || undefined,
       userAgent: request.headers.get("user-agent") || undefined,
       success: true,
       riskLevel: "medium",
@@ -143,8 +180,8 @@ export async function POST(request: NextRequest) {
       legalBasis,
       retentionPeriod: "7 days",
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error("Data export error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
   }
 }

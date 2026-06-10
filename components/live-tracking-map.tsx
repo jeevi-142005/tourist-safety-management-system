@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { MapPin, Navigation, AlertTriangle, Shield, Eye, Loader2, Satellite, Route } from "lucide-react"
-import { createBrowserClient } from "@/lib/supabase/client"
+import { createBrowserClient } from "@/lib/db-client/client"
 
 interface GeoZone {
   id: string
@@ -44,7 +44,57 @@ export function LiveTrackingMap() {
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null)
   const watchIdRef = useRef<number | null>(null)
   const mapRef = useRef<HTMLDivElement>(null)
-  const supabase = createBrowserClient()
+  const dbClient = createBrowserClient()
+
+  const [isMapScriptLoaded, setIsMapScriptLoaded] = useState(false)
+  const leafletMapRef = useRef<any>(null)
+  const userMarkerRef = useRef<any>(null)
+  const polylineRef = useRef<any>(null)
+
+  useEffect(() => {
+    const loadLeaflet = () => {
+      if (typeof window === "undefined") return
+      if ((window as any).L) {
+        setIsMapScriptLoaded(true)
+        return
+      }
+
+      if (!document.getElementById("leaflet-css")) {
+        const link = document.createElement("link")
+        link.id = "leaflet-css"
+        link.rel = "stylesheet"
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        document.head.appendChild(link)
+      }
+
+      if (!document.getElementById("leaflet-js")) {
+        const script = document.createElement("script")
+        script.id = "leaflet-js"
+        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        document.body.appendChild(script)
+        script.onload = () => {
+          setIsMapScriptLoaded(true)
+        }
+      } else {
+        const script = document.getElementById("leaflet-js") as HTMLScriptElement
+        if (script) {
+          script.addEventListener("load", () => {
+            setIsMapScriptLoaded(true)
+          })
+        }
+      }
+    }
+
+    loadLeaflet()
+
+    return () => {
+      // Cleanup map instance on unmount
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove()
+        leafletMapRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     initializeTracking()
@@ -63,12 +113,111 @@ export function LiveTrackingMap() {
     }
   }, [isTracking])
 
+  const fetchLocationHistory = async () => {
+    try {
+      const res = await fetch("/api/location/track")
+      if (res.ok) {
+        const result = await res.json()
+        if (result.locations && result.locations.length > 0) {
+          const mapped = result.locations.map((loc: any) => ({
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            accuracy: loc.accuracy || 10,
+            altitude: loc.altitude,
+            speed: loc.speed,
+            heading: loc.heading,
+            timestamp: loc.timestamp,
+            battery_level: loc.battery_level
+          })).reverse()
+          setLocationHistory(mapped)
+          if (mapped.length > 0) {
+            setCurrentLocation(mapped[mapped.length - 1])
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching location history:", err)
+    }
+  }
+
   const initializeTracking = async () => {
     await fetchGeoZones()
+    await fetchLocationHistory()
     await requestPermissions()
     await getBatteryLevel()
     setIsLoading(false)
   }
+
+  // Update map and marker on location update
+  useEffect(() => {
+    if (!currentLocation || typeof window === "undefined" || !(window as any).L || !isMapScriptLoaded) return
+
+    const L = (window as any).L
+
+    if (!leafletMapRef.current && mapRef.current) {
+      // Initialize map
+      const map = L.map(mapRef.current).setView([currentLocation.latitude, currentLocation.longitude], 14)
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map)
+
+      leafletMapRef.current = map
+
+      // Draw active geozones
+      geoZones.forEach((zone) => {
+        const zoneColors = {
+          safe: "#10b981", // green
+          caution: "#f59e0b", // yellow
+          high_risk: "#ef4444", // red
+          restricted: "#8b5cf6", // purple
+        }
+        const color = zoneColors[zone.zone_type] || "#3b82f6"
+        
+        L.circle([zone.center_lat, zone.center_lng], {
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.15,
+          radius: zone.radius || 500
+        }).addTo(map).bindPopup(`<b>${zone.name}</b><br>${zone.description || ""}`)
+      })
+    }
+
+    const map = leafletMapRef.current
+    if (map) {
+      // Pan/Zoom to new coordinates
+      map.setView([currentLocation.latitude, currentLocation.longitude])
+
+      // Manage User Marker
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setLatLng([currentLocation.latitude, currentLocation.longitude])
+      } else {
+        const userIcon = L.divIcon({
+          className: 'custom-user-marker',
+          html: `<div class="relative flex h-5 w-5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span class="relative inline-flex rounded-full h-5 w-5 bg-blue-600 border-2 border-white shadow-md"></span></div>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        })
+        userMarkerRef.current = L.marker([currentLocation.latitude, currentLocation.longitude], { icon: userIcon })
+          .addTo(map)
+          .bindPopup("You are here")
+          .openPopup()
+      }
+    }
+  }, [currentLocation, geoZones, isMapScriptLoaded])
+
+  useEffect(() => {
+    const map = leafletMapRef.current
+    const L = (window as any).L
+    if (!map || !L || !isMapScriptLoaded || locationHistory.length === 0) return
+
+    const latlngs = locationHistory.map(loc => [loc.latitude, loc.longitude])
+
+    if (polylineRef.current) {
+      polylineRef.current.setLatLngs(latlngs)
+    } else {
+      polylineRef.current = L.polyline(latlngs, { color: '#3b82f6', weight: 4, opacity: 0.6 }).addTo(map)
+    }
+  }, [locationHistory, isMapScriptLoaded])
 
   const requestPermissions = async () => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -105,7 +254,7 @@ export function LiveTrackingMap() {
 
   const fetchGeoZones = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await Database
         .from("geo_zones")
         .select("*")
         .eq("is_active", true)
@@ -253,7 +402,7 @@ export function LiveTrackingMap() {
     try {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await dbClient.auth.getUser()
       if (!user) return
 
       const severity =
@@ -270,7 +419,7 @@ export function LiveTrackingMap() {
           ? `You have entered ${zone.name}. ${zone.description}`
           : `You have exited ${zone.name}`
 
-      await supabase.from("user_alerts").insert({
+      await dbClient.from("user_alerts").insert({
         user_id: user.id,
         message,
         alert_type: "geofence",
@@ -290,10 +439,10 @@ export function LiveTrackingMap() {
     try {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await dbClient.auth.getUser()
       if (!user) return
 
-      await supabase.from("anomaly_patterns").insert({
+      await dbClient.from("anomaly_patterns").insert({
         user_id: user.id,
         type: "unusual_location",
         severity: zone.zone_type === "high_risk" ? "critical" : "high",
@@ -317,29 +466,38 @@ export function LiveTrackingMap() {
 
   const saveLocationToDatabase = async (location: LocationData) => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { error } = await supabase.from("location_tracks").insert({
-        user_id: user.id,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        accuracy: location.accuracy,
-        altitude: location.altitude,
-        speed: location.speed,
-        heading: location.heading,
-        timestamp: location.timestamp,
-        battery_level: location.battery_level,
-        zone_id: currentZone?.id || null,
+      const res = await fetch("/api/location/track", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          latitude: location.latitude,
+          longitude: location.longitude,
+          accuracy: location.accuracy,
+          altitude: location.altitude,
+          speed: location.speed,
+          heading: location.heading,
+          battery_level: location.battery_level,
+          timestamp: location.timestamp
+        })
       })
 
-      if (error) {
-        console.error("[v0] Error saving location:", error)
+      if (!res.ok) {
+        console.error("[v0] Error saving location via API")
+        return
+      }
+
+      const result = await res.json()
+      console.log("[v0] Saved location via backend route:", result)
+      
+      if (result.violations && result.violations.length > 0) {
+        result.violations.forEach((violation: any) => {
+          console.warn(`[v0] Geofence violation detected by backend: ${violation.zone_name} (${violation.zone_type})`)
+        })
       }
     } catch (error) {
-      console.error("Error saving location to database:", error)
+      console.error("Error saving location to tracking API:", error)
     }
   }
 
@@ -347,13 +505,13 @@ export function LiveTrackingMap() {
     try {
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await dbClient.auth.getUser()
       if (!user) return
 
       const connectionType = (navigator as any).connection?.effectiveType || "unknown"
       const connectionStrength = (navigator as any).connection?.downlink || 0
 
-      await supabase.from("device_metrics").insert({
+      await dbClient.from("device_metrics").insert({
         user_id: user.id,
         battery_level: location.battery_level,
         connection_strength: Math.min(connectionStrength * 10, 100),
@@ -503,52 +661,27 @@ export function LiveTrackingMap() {
           <CardDescription>Your location and nearby geo-fenced zones</CardDescription>
         </CardHeader>
         <CardContent>
-          <div
-            ref={mapRef}
-            className="w-full h-96 bg-gradient-to-br from-blue-50 to-green-50 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-gray-300 relative overflow-hidden"
-          >
-            <div className="absolute inset-0 opacity-10">
-              <div className="grid grid-cols-8 grid-rows-6 h-full w-full">
-                {Array.from({ length: 48 }).map((_, i) => (
-                  <div key={i} className="border border-gray-400"></div>
-                ))}
+          <div className="w-full h-96 rounded-lg overflow-hidden relative border border-gray-200 bg-gray-50 flex items-center justify-center">
+            {(!isMapScriptLoaded || !currentLocation) && (
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-green-50/50 flex flex-col items-center justify-center p-4 text-center z-10">
+                <div className="p-3 bg-white/90 rounded-full shadow-sm mb-3">
+                  <MapPin className="h-6 w-6 text-blue-500 animate-bounce" />
+                </div>
+                <h4 className="font-semibold text-sm text-gray-800">
+                  {!isMapScriptLoaded ? "Loading map engine..." : "Awaiting location GPS lock..."}
+                </h4>
+                <p className="text-xs text-gray-400 max-w-xs mt-1">
+                  {!isMapScriptLoaded 
+                    ? "Getting Leaflet GIS map renderer assets..." 
+                    : "Please toggle 'Enable Live Tracking' above to acquire a live satellite signal."}
+                </p>
               </div>
-            </div>
-
-            <div className="text-center space-y-3 z-10">
-              <div className="p-3 bg-white/80 rounded-full">
-                <MapPin className="h-8 w-8 text-blue-600 mx-auto" />
-              </div>
-              <div className="bg-white/90 p-4 rounded-lg shadow-sm">
-                <p className="font-medium text-gray-800">Live Location Display</p>
-                {currentLocation ? (
-                  <div className="space-y-1 mt-2">
-                    <p className="text-sm font-mono text-gray-600">
-                      {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
-                    </p>
-                    <p className="text-xs text-gray-500">Accuracy: ±{Math.round(currentLocation.accuracy)}m</p>
-                    {currentZone && (
-                      <Badge className={`text-xs ${getZoneColor(currentZone.zone_type)}`}>In {currentZone.name}</Badge>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500 mt-2">Enable tracking to see your location</p>
-                )}
-              </div>
-            </div>
-
-            {geoZones.slice(0, 3).map((zone, index) => (
-              <div
-                key={zone.id}
-                className={`absolute w-8 h-8 rounded-full ${getZoneColor(zone.zone_type)} flex items-center justify-center text-xs font-bold opacity-60`}
-                style={{
-                  top: `${20 + index * 25}%`,
-                  right: `${10 + index * 15}%`,
-                }}
-              >
-                {zone.name.charAt(0)}
-              </div>
-            ))}
+            )}
+            
+            <div
+              ref={mapRef}
+              className={`w-full h-full ${(!isMapScriptLoaded || !currentLocation) ? "hidden" : "block"}`}
+            />
           </div>
 
           <div className="mt-4 flex items-center justify-between text-sm text-gray-600">

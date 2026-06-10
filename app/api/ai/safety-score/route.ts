@@ -1,45 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createServerClient } from "@/lib/db-client/server";
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "mock-key");
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-        },
-      }
-    );
+    const dbClient = await createServerClient();
 
-    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data: { user } } = await dbClient.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: locationHistory } = await supabase
+    const { data: locationHistory } = await dbClient
       .from('location_tracks')
       .select('*')
       .eq('user_id', user.id)
       .order('timestamp', { ascending: false })
       .limit(100);
 
-    const { data: alertHistory } = await supabase
+    const { data: alertHistory } = await dbClient
       .from('alerts')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50);
 
-    const { data: geoZones } = await supabase
+    const { data: geoZones } = await dbClient
       .from('geo_zones')
       .select('*');
 
@@ -97,7 +86,7 @@ export async function POST(request: NextRequest) {
       aiAnalysis = calculateFallbackSafetyScore(analysisData);
     }
 
-    const { data: safetyScore, error } = await supabase
+    const { data: safetyScore, error } = await dbClient
       .from('safety_scores')
       .insert({
         user_id: user.id,

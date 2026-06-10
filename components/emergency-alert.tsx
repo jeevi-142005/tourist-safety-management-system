@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Textarea } from "@/components/ui/textarea"
-import { AlertTriangle, Loader2, MapPin, Clock, Wifi, WifiOff } from "lucide-react"
+import { AlertTriangle, Loader2, MapPin, Clock, Wifi, WifiOff, ChevronRight } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { createClient } from "@/lib/supabase/client"
+import { cn } from "@/lib/utils"
 
 interface EmergencyAlertProps {
   type: "emergency" | "medical" | "security" | "assistance"
@@ -26,19 +26,22 @@ export function EmergencyAlert({ type, icon, label, description, className, size
   const [alertSent, setAlertSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
-  const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [isOnline, setIsOnline] = useState(true)
   const [offlineMode, setOfflineMode] = useState(false)
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
-    
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-    
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
+    if (typeof window !== "undefined") {
+      setIsOnline(navigator.onLine)
+      const handleOnline = () => setIsOnline(true)
+      const handleOffline = () => setIsOnline(false)
+      
+      window.addEventListener('online', handleOnline)
+      window.addEventListener('offline', handleOffline)
+      
+      return () => {
+        window.removeEventListener('online', handleOnline)
+        window.removeEventListener('offline', handleOffline)
+      }
     }
   }, [])
 
@@ -80,34 +83,32 @@ export function EmergencyAlert({ type, icon, label, description, className, size
   }
 
   const sendDirectOfflineAlert = (alertData: any) => {
-    // Store in localStorage with immediate flag
-    const offlineAlerts = JSON.parse(localStorage.getItem('offlineAlerts') || '[]')
-    const immediateAlert = {
-      ...alertData,
-      id: `immediate-${Date.now()}`,
-      immediate: true,
-      offline: true,
-      timestamp: Date.now()
+    if (typeof window !== "undefined") {
+      const offlineAlerts = JSON.parse(localStorage.getItem('offlineAlerts') || '[]')
+      const immediateAlert = {
+        ...alertData,
+        id: `immediate-${Date.now()}`,
+        immediate: true,
+        offline: true,
+        timestamp: Date.now()
+      }
+      offlineAlerts.unshift(immediateAlert)
+      localStorage.setItem('offlineAlerts', JSON.stringify(offlineAlerts))
+      
+      localStorage.setItem('newOfflineAlert', JSON.stringify(immediateAlert))
+      
+      const channel = new BroadcastChannel('emergency-direct')
+      channel.postMessage({
+        type: 'OFFLINE_EMERGENCY_NOW',
+        alert: immediateAlert
+      })
+      
+      window.dispatchEvent(new CustomEvent('emergency-now', {
+        detail: immediateAlert
+      }))
+      
+      setTimeout(() => channel.close(), 1000)
     }
-    offlineAlerts.unshift(immediateAlert)
-    localStorage.setItem('offlineAlerts', JSON.stringify(offlineAlerts))
-    
-    // Set flag for admin polling
-    localStorage.setItem('newOfflineAlert', JSON.stringify(immediateAlert))
-    
-    // BroadcastChannel for same session
-    const channel = new BroadcastChannel('emergency-direct')
-    channel.postMessage({
-      type: 'OFFLINE_EMERGENCY_NOW',
-      alert: immediateAlert
-    })
-    
-    // Custom event for same page
-    window.dispatchEvent(new CustomEvent('emergency-now', {
-      detail: immediateAlert
-    }))
-    
-    setTimeout(() => channel.close(), 1000)
   }
 
   const sendAlert = async () => {
@@ -120,24 +121,20 @@ export function EmergencyAlert({ type, icon, label, description, className, size
     setError(null)
 
     try {
-      // Force get location with longer timeout
       let location = currentLocation
       if (!location) {
         try {
           setError("Getting your location...")
           location = await getCurrentLocation()
           setError(null)
-          console.log("Got fresh location:", location)
         } catch (locationError) {
           console.warn("Could not get location:", locationError)
-          setError(null) // Clear location error, continue with alert
+          setError(null)
         }
       }
 
-      // Use mock location for testing if real location fails
       if (!location) {
-        location = { lat: 26.9124, lng: 75.7873 } // Jaipur coordinates for testing
-        console.log("Using fallback location:", location)
+        location = { lat: 11.0159, lng: 76.9368 } // Default coordinates
       }
 
       const alertData = {
@@ -158,29 +155,43 @@ export function EmergencyAlert({ type, icon, label, description, className, size
         }
       }
 
-      console.log("Final alert data:", alertData)
-
       let alertSentSuccessfully = false
 
-      // Try online first
+      // Use the new user alerts API
       if (isOnline) {
         try {
-          const supabase = createClient()
-          if (supabase) {
-            const { error: supabaseError } = await supabase
-              .from('emergency_alerts')
-              .insert(alertData)
-
-            if (!supabaseError) {
-              alertSentSuccessfully = true
-            }
+          const res = await fetch("/api/alerts/user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: type,
+              message: message || `${label} alert sent`,
+              severity: type === 'emergency' ? 'critical' : type === 'medical' ? 'high' : 'medium',
+              location_lat: location?.lat,
+              location_lng: location?.lng,
+              device_info: {
+                userAgent: navigator.userAgent,
+                timestamp: Date.now(),
+                online: true
+              }
+            }),
+          })
+          if (res.ok) {
+            alertSentSuccessfully = true
+          } else {
+            // Fallback: try the sync-offline endpoint
+            const res2 = await fetch("/api/emergency/sync-offline", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(alertData),
+            })
+            if (res2.ok) alertSentSuccessfully = true
           }
-        } catch (supabaseError) {
-          console.warn("Online failed, sending direct offline:", supabaseError)
+        } catch (fetchError) {
+          console.warn("Online fetch failed, falling back:", fetchError)
         }
       }
 
-      // Send direct offline alert
       if (!alertSentSuccessfully || !isOnline) {
         sendDirectOfflineAlert(alertData)
         setOfflineMode(!isOnline)
@@ -197,18 +208,16 @@ export function EmergencyAlert({ type, icon, label, description, className, size
 
     } catch (error) {
       console.error("Alert error:", error)
-      // Force direct offline alert with fallback location
       const fallbackAlert = {
         user_id: user.id,
         user_name: user.name || user.email?.split('@')[0] || 'Unknown User',
         type: type,
         message: message || `${label} alert`,
         severity: type === 'emergency' ? 'critical' : 'high',
-        location_lat: currentLocation?.lat || 26.9124,
-        location_lng: currentLocation?.lng || 75.7873,
+        location_lat: currentLocation?.lat || 11.0159,
+        location_lng: currentLocation?.lng || 76.9368,
         created_at: new Date().toISOString()
       }
-      console.log("Fallback alert:", fallbackAlert)
       sendDirectOfflineAlert(fallbackAlert)
       setAlertSent(true)
       setOfflineMode(true)
@@ -227,25 +236,53 @@ export function EmergencyAlert({ type, icon, label, description, className, size
     }
   }
 
-  const buttonSizeClasses = {
-    sm: "h-8 px-3 text-sm",
-    md: "h-10 px-4",
-    lg: "h-12 px-6 text-lg"
+  // Get color profiles based on alert category
+  const colorProfiles = {
+    emergency: {
+      iconBg: "bg-red-500 text-white",
+      textColor: "text-red-600",
+      borderColor: "border-red-100 hover:bg-red-50 bg-white"
+    },
+    medical: {
+      iconBg: "bg-orange-500 text-white",
+      textColor: "text-orange-600",
+      borderColor: "border-orange-100 hover:bg-orange-50 bg-white"
+    },
+    security: {
+      iconBg: "bg-yellow-500 text-white",
+      textColor: "text-yellow-600",
+      borderColor: "border-yellow-100 hover:bg-yellow-50 bg-white"
+    },
+    assistance: {
+      iconBg: "bg-blue-500 text-white",
+      textColor: "text-blue-600",
+      borderColor: "border-blue-100 hover:bg-blue-50 bg-white"
+    }
   }
+
+  const colors = colorProfiles[type]
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button
-          className={`${className} ${buttonSizeClasses[size]} flex flex-col items-center justify-center space-y-1 relative`}
+        <button
           onClick={() => setIsOpen(true)}
+          className={cn(`flex items-center justify-between p-4 rounded-xl border w-full text-left transition-all duration-200 group h-auto ${colors.borderColor} shadow-sm hover:shadow-md relative`, className)}
         >
-          {icon}
-          <span className="text-xs font-medium">{label}</span>
+          <div className="flex items-center space-x-3.5">
+            <div className={`p-2.5 rounded-lg ${colors.iconBg}`}>
+              {icon}
+            </div>
+            <div>
+              <div className={`font-bold text-xs ${colors.textColor}`}>{label}</div>
+              <span className="text-[10px] text-gray-400 font-medium block mt-0.5">{description}</span>
+            </div>
+          </div>
+          <ChevronRight className={`h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5 ${colors.textColor}`} />
           {!isOnline && (
-            <WifiOff className="absolute -top-1 -right-1 h-3 w-3 text-orange-500" />
+            <WifiOff className="absolute -top-1 -right-1 h-3.5 w-3.5 text-orange-500" />
           )}
-        </Button>
+        </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -284,7 +321,7 @@ export function EmergencyAlert({ type, icon, label, description, className, size
             )}
 
             <div>
-              <label className="text-sm font-medium mb-2 block">
+              <label className="text-xs font-semibold mb-1.5 block">
                 Additional Information (Optional)
               </label>
               <Textarea
@@ -292,39 +329,32 @@ export function EmergencyAlert({ type, icon, label, description, className, size
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Provide any additional details about your situation..."
                 rows={3}
+                className="text-xs"
               />
             </div>
 
             {currentLocation && (
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <MapPin className="h-4 w-4" />
+              <div className="flex items-center space-x-2 text-xs text-gray-500">
+                <MapPin className="h-3.5 w-3.5" />
                 <span>Location: {currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)}</span>
               </div>
             )}
 
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <Clock className="h-4 w-4" />
+            <div className="flex items-center space-x-2 text-xs text-gray-500 border-t border-gray-100 pt-3">
+              <Clock className="h-3.5 w-3.5" />
               <span>{isOnline ? 'Alert will be sent immediately' : 'OFFLINE - Immediate admin alert'}</span>
               {isOnline ? (
-                <Wifi className="h-4 w-4 text-green-500" />
+                <Wifi className="h-3.5 w-3.5 text-green-500" />
               ) : (
-                <WifiOff className="h-4 w-4 text-orange-500" />
+                <WifiOff className="h-3.5 w-3.5 text-orange-500" />
               )}
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => getCurrentLocation().then(loc => console.log("Test location:", loc))}
-                className="text-xs"
-              >
-                Test Location
-              </Button>
             </div>
 
             <div className="flex space-x-2">
               <Button
                 variant="outline"
                 onClick={() => setIsOpen(false)}
-                className="flex-1"
+                className="flex-1 text-xs"
                 disabled={isLoading}
               >
                 Cancel
@@ -332,16 +362,16 @@ export function EmergencyAlert({ type, icon, label, description, className, size
               <Button
                 onClick={sendAlert}
                 disabled={isLoading}
-                className={`flex-1 ${!isOnline ? 'bg-orange-600 hover:bg-orange-700' : 'bg-red-600 hover:bg-red-700'}`}
+                className={`flex-1 text-xs ${!isOnline ? 'bg-orange-600 hover:bg-orange-700' : 'bg-red-600 hover:bg-red-700'}`}
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                     {isOnline ? 'Sending...' : 'Sending Offline...'}
                   </>
                 ) : (
                   <>
-                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
                     {isOnline ? 'Send Alert' : 'Send Offline Alert'}
                   </>
                 )}

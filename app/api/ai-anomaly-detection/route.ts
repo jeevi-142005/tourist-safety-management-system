@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { GoogleGenerativeAI } from "@google/generative-ai"
-import { createClient } from "@/lib/supabase/server"
+import { createClient } from "@/lib/db-client/server"
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "mock-key")
 
@@ -25,17 +25,17 @@ export async function POST(request: NextRequest) {
     const body: AnomalyDetectionRequest = await request.json()
     const { user_id, device_metrics, location, timestamp } = body
 
-    const supabase = await createClient()
+    const dbClient = await createClient()
 
     // Get user's historical data for pattern analysis
-    const { data: historicalAlerts } = await supabase
+    const { data: historicalAlerts } = await Database
       .from("alerts")
       .select("*")
       .eq("tourist_id", user_id)
       .order("created_at", { ascending: false })
       .limit(50)
 
-    const { data: historicalMetrics } = await supabase
+    const { data: historicalMetrics } = await Database
       .from("device_metrics")
       .select("*")
       .eq("user_id", user_id)
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       .limit(100)
 
     // Store current metrics
-    await supabase.from("device_metrics").insert({
+    await dbClient.from("device_metrics").insert({
       user_id,
       battery_level: device_metrics.battery_level,
       connection_strength: device_metrics.connection_strength,
@@ -145,7 +145,7 @@ If no significant anomalies are detected, return:
         resolved: false,
       }))
 
-      const { data: storedAnomalies } = await supabase.from("anomaly_patterns").insert(anomaliesToStore).select()
+      const { data: storedAnomalies } = await dbClient.from("anomaly_patterns").insert(anomaliesToStore).select()
 
       // Add IDs to the response
       if (storedAnomalies) {

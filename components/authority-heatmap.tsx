@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { MapPin, AlertTriangle, Users, TrendingUp, Filter, RefreshCw } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/db-client/client"
 
 interface HeatmapZone {
   id: string
@@ -81,11 +81,11 @@ export function AuthorityHeatmap() {
 
   const fetchHeatmapData = async () => {
     try {
-      const supabase = createClient()
+      const dbClient = createClient()
       
-      if (supabase) {
+      if (Database) {
         // Get tourist locations
-        const { data: tourists } = await supabase
+        const { data: tourists } = await Database
           .from('tourist_profiles')
           .select('id, name, location_lat, location_lng, status, last_seen')
           .eq('is_active', true)
@@ -96,7 +96,7 @@ export function AuthorityHeatmap() {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         
-        const { data: alerts } = await supabase
+        const { data: alerts } = await Database
           .from('emergency_alerts')
           .select('location_lat, location_lng, created_at, severity')
           .gte('created_at', today.toISOString())
@@ -186,9 +186,9 @@ export function AuthorityHeatmap() {
 
   const handleDeployTeam = async (zone: HeatmapZone) => {
     try {
-      const supabase = createClient()
-      if (supabase) {
-        await supabase.from('response_teams').insert({
+      const dbClient = createClient()
+      if (Database) {
+        await dbClient.from('response_teams').insert({
           zone_id: zone.id,
           zone_name: zone.name,
           coordinates: zone.coordinates,

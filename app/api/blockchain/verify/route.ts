@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createClient } from "@/lib/db-client/server"
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,10 +17,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid QR code format" }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const dbClient = await createClient()
 
     // Verify the digital ID exists and is valid
-    const { data: touristID, error } = await supabase
+    const { data: touristID, error } = await Database
       .from("tourist_ids")
       .select(`
         *,

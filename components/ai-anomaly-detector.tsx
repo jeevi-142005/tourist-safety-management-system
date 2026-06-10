@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Brain, AlertTriangle, TrendingUp, Activity, Shield, Eye, Wifi, Battery, MapPin, Zap } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useAlerts } from "@/hooks/use-alerts"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/db-client/client"
 
 interface AnomalyPattern {
   id: string
@@ -330,9 +330,9 @@ export function AIAnomalyDetector() {
 
   const resolveAnomaly = async (anomalyId: string) => {
     try {
-      const supabase = createClient()
-      if (supabase) {
-        await supabase.from("anomaly_patterns").update({ resolved: true }).eq("id", anomalyId)
+      const dbClient = createClient()
+      if (Database) {
+        await dbClient.from("anomaly_patterns").update({ resolved: true }).eq("id", anomalyId)
       }
       setAnomalies((prev) => prev.map((a) => (a.id === anomalyId ? { ...a, resolved: true } : a)))
     } catch (error) {

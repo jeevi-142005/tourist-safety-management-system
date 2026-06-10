@@ -1,34 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/db-client/server"
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const dbClient = await createServerClient()
 
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await dbClient.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Check admin role
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+    const { data: profile } = await dbClient.from("profiles").select("role").eq("id", user.id).single()
 
     if (!profile || !["admin", "authority"].includes(profile.role)) {
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
     // Get all tourists with their latest location and blockchain data
-    const { data: tourists } = await supabase
+    const { data: tourists } = await dbClient
       .from("profiles")
       .select(`
         id,

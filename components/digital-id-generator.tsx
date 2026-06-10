@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog"
 import { QrCode, Shield, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/db-client/client"
 
 interface DigitalIDData {
   id: string
@@ -114,18 +114,18 @@ export function DigitalIDGenerator() {
         return
       }
 
-      const supabase = createClient()
-      if (!supabase) {
+      const dbClient = createClient()
+      if (!Database) {
         throw new Error("Database connection not available")
       }
 
-      const { data: { user: supabaseUser }, error: userError } = await supabase.auth.getUser()
-      if (userError || !supabaseUser) {
+      const { data: { user: DatabaseUser }, error: userError } = await dbClient.auth.getUser()
+      if (userError || !DatabaseUser) {
         throw new Error("User not authenticated with database")
       }
 
       const idData = {
-        user_id: supabaseUser.id,
+        user_id: DatabaseUser.id,
         document_type: formData.documentType as "aadhaar" | "passport" | "other",
         document_number: formData.documentNumber,
         valid_from: new Date().toISOString(),
@@ -138,7 +138,7 @@ export function DigitalIDGenerator() {
         city_name: formData.cityName,
       })
 
-      const { data: insertedID, error: insertError } = await supabase
+      const { data: insertedID, error: insertError } = await Database
         .from("tourist_ids")
         .insert({
           ...idData,
@@ -164,23 +164,23 @@ export function DigitalIDGenerator() {
       const qrCodeData = generateQRCode(digitalIDResult)
       digitalIDResult.qrCodeData = qrCodeData
 
-      await supabase.from("tourist_ids").update({ qr_code_data: qrCodeData }).eq("id", insertedID.id)
+      await dbClient.from("tourist_ids").update({ qr_code_data: qrCodeData }).eq("id", insertedID.id)
 
-      await supabase.from("blockchain_logs").insert({
+      await dbClient.from("blockchain_logs").insert({
         transaction_hash: `0x${blockchainHash.slice(0, 40)}`,
         transaction_type: "id_creation",
-        user_id: supabaseUser.id,
+        user_id: DatabaseUser.id,
         data_hash: blockchainHash,
         block_number: Math.floor(Math.random() * 1000000),
         gas_used: Math.floor(Math.random() * 50000) + 21000,
       })
 
-      await supabase
+      await Database
         .from('tourist_profiles')
         .upsert({
-          id: supabaseUser.id,
+          id: DatabaseUser.id,
           name: formData.fullName,
-          email: supabaseUser.email,
+          email: DatabaseUser.email,
           blockchain_id: blockchainHash,
           is_active: true,
           created_at: new Date().toISOString()

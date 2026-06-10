@@ -1,34 +1,23 @@
-import { createClient } from '@supabase/supabase-js'
+import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
 export async function POST(request) {
   try {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
-    }
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    )
-
     const { device_id, device_name, alert_type, message, location_lat, location_lng, battery_level, signal_strength } = await request.json()
 
-    const { data, error } = await supabase
-      .from('iot_device_alerts')
-      .insert([{
-        device_id,
-        device_name,
-        alert_type,
+    const data = await db.iotDeviceAlert.create({
+      data: {
+        deviceId: device_id,
+        deviceName: device_name,
+        alertType: alert_type,
         message,
-        location_lat: parseFloat(location_lat),
-        location_lng: parseFloat(location_lng),
-        battery_level: parseInt(battery_level),
-        signal_strength: parseInt(signal_strength),
+        locationLat: parseFloat(location_lat),
+        locationLng: parseFloat(location_lng),
+        batteryLevel: parseInt(battery_level),
+        signalStrength: parseInt(signal_strength),
         status: 'active'
-      }])
-
-    if (error) throw error
+      }
+    })
 
     return NextResponse.json({ success: true, data })
   } catch (error) {

@@ -31,7 +31,7 @@ import { useAIAutomation } from "@/hooks/use-ai-automation"
 import { NotificationSystem } from "./notification-system"
 import { AIChatAssistant } from "./ai-chat-assistant"
 import { AuthorityHeatmap } from "./authority-heatmap"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/db-client/client"
 
 interface Alert {
   id: string
@@ -237,10 +237,10 @@ useEffect(() => {
     if (offlineAlertQueue.length === 0) return
 
     try {
-      const supabase = createClient()
-      if (!supabase) return
+      const dbClient = createClient()
+      if (!Database) return
 
-      const { error } = await supabase
+      const { error } = await Database
         .from('emergency_alerts')
         .insert(offlineAlertQueue.map(alert => ({
           user_id: alert.id,
@@ -286,10 +286,10 @@ useEffect(() => {
     
     try {
       setIsPolling(true)
-      const supabase = createClient()
-      if (!supabase) return
+      const dbClient = createClient()
+      if (!Database) return
 
-      const { data: alertsData, error } = await supabase
+      const { data: alertsData, error } = await Database
         .from('emergency_alerts')
         .select('*')
         .neq('type', 'admin_notification')
@@ -325,13 +325,13 @@ useEffect(() => {
 
   const handleSendAlert = async (tourist: Tourist) => {
     try {
-      const supabase = createClient()
-      if (!supabase) {
+      const dbClient = createClient()
+      if (!Database) {
         alert('Database not available')
         return
       }
 
-      const { error } = await supabase.from('emergency_alerts').insert({
+      const { error } = await dbClient.from('emergency_alerts').insert({
         user_id: tourist.id,
         type: 'admin_notification',
         message: `Alert sent to ${tourist.name} by admin`,
@@ -360,10 +360,10 @@ useEffect(() => {
         return
       }
 
-      const supabase = createClient()
-      if (!supabase) return
+      const dbClient = createClient()
+      if (!Database) return
 
-      const { error } = await supabase
+      const { error } = await Database
         .from('emergency_alerts')
         .update({ 
           status: 'resolved',
@@ -384,9 +384,9 @@ useEffect(() => {
   const fetchDashboardStats = useCallback(async () => {
     try {
       setIsLoadingStats(true)
-      const supabase = createClient()
+      const dbClient = createClient()
       
-      if (!supabase) {
+      if (!Database) {
         setDashboardStats({
           activeTourists: 1247,
           safeZones: 8,
@@ -396,12 +396,12 @@ useEffect(() => {
         return
       }
 
-      const { count: touristCount } = await supabase
+      const { count: touristCount } = await Database
         .from('tourist_profiles')
         .select('*', { count: 'exact', head: true })
         .eq('is_active', true)
       
-      const { data: resolvedAlertsData } = await supabase
+      const { data: resolvedAlertsData } = await Database
         .from('emergency_alerts')
         .select('created_at, resolved_at')
         .eq('status', 'resolved')
@@ -440,10 +440,10 @@ useEffect(() => {
 
   const fetchRecentActivity = useCallback(async () => {
     try {
-      const supabase = createClient()
-      if (!supabase) return
+      const dbClient = createClient()
+      if (!Database) return
       
-      const { data: recentAlerts } = await supabase
+      const { data: recentAlerts } = await Database
         .from('emergency_alerts')
         .select('*')
         .order('created_at', { ascending: false })
@@ -465,10 +465,10 @@ useEffect(() => {
 
   const fetchTourists = useCallback(async () => {
     try {
-      const supabase = createClient()
-      if (!supabase) return
+      const dbClient = createClient()
+      if (!Database) return
 
-      const { data: touristsData, error } = await supabase
+      const { data: touristsData, error } = await Database
         .from('tourist_profiles')
         .select('*')
         .order('created_at', { ascending: false })

@@ -1,72 +1,81 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { db } from "@/lib/db"
 import jsPDF from "jspdf"
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await request.json()
     const { alertId, incidentDescription, assignedOfficer } = body
 
-    // Generate E-FIR using database function
-    const { data: firId, error: firError } = await supabase.rpc("generate_efir", {
-      alert_id_param: alertId,
-      incident_description: incidentDescription,
+    if (!alertId) {
+      return NextResponse.json({ error: "Alert ID is required" }, { status: 400 })
+    }
+
+    // Fetch alert from database
+    const alert = await db.emergencyAlert.findUnique({
+      where: { id: alertId }
     })
 
-    if (firError) {
-      console.error("E-FIR generation error:", firError)
-      return NextResponse.json({ error: "Failed to generate E-FIR" }, { status: 500 })
+    if (!alert) {
+      return NextResponse.json({ error: "Alert not found" }, { status: 404 })
     }
 
-    // Update with assigned officer if provided
-    if (assignedOfficer) {
-      await supabase.from("efir_records").update({ assigned_officer: assignedOfficer }).eq("id", firId)
+    // Fetch complainant details from User profile
+    const complainantUser = await db.user.findUnique({
+      where: { id: alert.userId }
+    })
+
+    const complainantDetails = {
+      name: complainantUser?.name || alert.userName || "Unknown Tourist",
+      email: complainantUser?.email || "N/A",
+      phone: complainantUser?.phone || "N/A",
+      alert_type: alert.type,
+      severity: alert.severity,
     }
 
-    // Get complete E-FIR data for PDF generation
-    const { data: efirData } = await supabase
-      .from("efir_records")
-      .select(`
-        *,
-        alerts:alert_id (
-          *,
-          profiles:user_id (
-            full_name,
-            email,
-            phone
-          )
-        ),
-        assigned_officer_profile:assigned_officer (
-          full_name,
-          email
-        )
-      `)
-      .eq("id", firId)
-      .single()
+    const firNumber = `E-FIR-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`
+
+    // Create the E-FIR record
+    const efir = await db.efirRecord.create({
+      data: {
+        alertId: alert.id,
+        firNumber,
+        incidentDetails: incidentDescription || "No description provided",
+        assignedOfficer: assignedOfficer || null,
+        complainantDetails: complainantDetails
+      }
+    })
+
+    // Prepare complete data for PDF generation
+    const assignedOfficerUser = assignedOfficer 
+      ? await db.user.findUnique({ where: { id: assignedOfficer } })
+      : null
+
+    const efirData = {
+      fir_number: efir.firNumber,
+      created_at: efir.createdAt.toISOString(),
+      complainant_details: complainantDetails,
+      incident_details: efir.incidentDetails,
+      location: alert.locationLat && alert.locationLng ? { lat: alert.locationLat, lng: alert.locationLng } : null,
+      assigned_officer_profile: assignedOfficerUser ? {
+        full_name: assignedOfficerUser.name,
+        email: assignedOfficerUser.email
+      } : null
+    }
 
     // Generate PDF
     const pdfBuffer = await generateEFIRPDF(efirData)
 
     return NextResponse.json({
-      firId,
-      firNumber: efirData.fir_number,
+      firId: efir.id,
+      firNumber: efir.firNumber,
       pdfUrl: `data:application/pdf;base64,${pdfBuffer.toString("base64")}`,
       message: "E-FIR generated successfully",
     })
@@ -122,8 +131,8 @@ async function generateEFIRPDF(efirData: any): Promise<Buffer> {
     doc.setFontSize(14)
     doc.text("ASSIGNED OFFICER:", 20, 240)
     doc.setFontSize(12)
-    doc.text(`Name: ${efirData.assigned_officer_profile.full_name}`, 20, 255)
-    doc.text(`Email: ${efirData.assigned_officer_profile.email}`, 20, 265)
+    doc.text(`Name: ${efirData.assigned_officer_profile.full_name || "N/A"}`, 20, 255)
+    doc.text(`Email: ${efirData.assigned_officer_profile.email || "N/A"}`, 20, 265)
   }
 
   // Footer

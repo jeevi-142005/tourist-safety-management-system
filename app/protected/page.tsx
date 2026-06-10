@@ -1,20 +1,20 @@
 import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+import { createClient } from "@/lib/db-client/server"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Shield, User, LogOut } from "lucide-react"
 import Link from "next/link"
 
 export default async function ProtectedPage() {
-  const supabase = await createClient()
+  const dbClient = await createClient()
 
-  const { data, error } = await supabase.auth.getUser()
+  const { data, error } = await dbClient.auth.getUser()
   if (error || !data?.user) {
     redirect("/auth/login")
   }
 
   // Get user profile
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", data.user.id).single()
+  const { data: profile } = await dbClient.from("profiles").select("*").eq("id", data.user.id).single()
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 p-4">
@@ -73,7 +73,7 @@ export default async function ProtectedPage() {
           <Card>
             <CardHeader>
               <CardTitle>Database Connection</CardTitle>
-              <CardDescription>Supabase integration status</CardDescription>
+              <CardDescription>Database integration status</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -101,7 +101,7 @@ export default async function ProtectedPage() {
           </CardHeader>
           <CardContent>
             <ul className="space-y-2 text-sm">
-              <li>• Your Supabase database is properly configured with Row Level Security</li>
+              <li>• Your Database database is properly configured with Row Level Security</li>
               <li>• User profiles are automatically created when you sign up</li>
               <li>• Authentication is working correctly with middleware protection</li>
               <li>• You can now build features that require user authentication</li>

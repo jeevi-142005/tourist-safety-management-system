@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/db-client/server"
 import { blockchainClient } from "@/lib/blockchain/client"
 import { encryptionService } from "@/lib/crypto/encryption"
 import QRCode from "qrcode"
@@ -8,18 +7,11 @@ import { randomUUID } from "crypto"
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const dbClient = await createServerClient()
 
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await dbClient.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -62,7 +54,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Store in database
-    const { data: digitalId, error } = await supabase
+    const { data: digitalId, error } = await Database
       .from("digital_tourist_ids")
       .insert({
         user_id: user.id,
@@ -84,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Log blockchain transaction
-    await supabase.from("blockchain_logs").insert({
+    await dbClient.from("blockchain_logs").insert({
       transaction_hash: blockchainResult.transactionHash,
       transaction_type: "id_creation",
       user_id: user.id,

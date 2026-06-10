@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { createBrowserClient } from "@/lib/supabase/client"
+import { createBrowserClient } from "@/lib/db-client/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -29,17 +29,17 @@ export default function ProfileClientPage() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
-    const supabase = createBrowserClient()
+    const dbClient = createBrowserClient()
 
     useEffect(() => {
         const fetchProfile = async () => {
             try {
                 const {
                     data: { user },
-                } = await supabase.auth.getUser()
+                } = await dbClient.auth.getUser()
                 if (!user) return
 
-                const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+                const { data, error } = await dbClient.from("profiles").select("*").eq("id", user.id).single()
 
                 if (error) throw error
                 setProfile(data)
@@ -52,7 +52,7 @@ export default function ProfileClientPage() {
         }
 
         fetchProfile()
-    }, [supabase])
+    }, [Database])
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -62,7 +62,7 @@ export default function ProfileClientPage() {
         setMessage(null)
 
         try {
-            const { error } = await supabase
+            const { error } = await Database
                 .from("profiles")
                 .update({
                     full_name: profile.full_name,

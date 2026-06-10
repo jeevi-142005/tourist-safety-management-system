@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { createBrowserClient } from "@/lib/supabase/client"
+import { createBrowserClient } from "@/lib/db-client/client"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -42,17 +42,17 @@ export function NavigationMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
-  const supabase = createBrowserClient()
+  const dbClient = createBrowserClient()
 
   useEffect(() => {
     const getUser = async () => {
       try {
         const {
           data: { user: authUser },
-        } = await supabase.auth.getUser()
+        } = await dbClient.auth.getUser()
         if (authUser) {
           // Get profile data
-          const { data: profile } = await supabase.from("profiles").select("*").eq("id", authUser.id).single()
+          const { data: profile } = await dbClient.from("profiles").select("*").eq("id", authUser.id).single()
 
           setUser({
             id: authUser.id,
@@ -73,7 +73,7 @@ export function NavigationMenu() {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = dbClient.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         setUser(null)
       } else if (event === "SIGNED_IN" && session) {
@@ -82,10 +82,10 @@ export function NavigationMenu() {
     })
 
     return () => subscription.unsubscribe()
-  }, [supabase])
+  }, [Database])
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
+    await dbClient.auth.signOut()
     router.push("/")
   }
 

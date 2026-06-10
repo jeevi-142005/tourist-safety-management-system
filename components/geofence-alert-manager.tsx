@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { MapPin, AlertTriangle, Shield, Eye, Bell, Clock, CheckCircle, Loader2 } from "lucide-react"
-import { createBrowserClient } from "@/lib/supabase/client"
+import { createBrowserClient } from "@/lib/db-client/client"
 
 interface GeofenceAlert {
   id: string
@@ -47,7 +47,7 @@ export function GeofenceAlertManager() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const supabase = createBrowserClient()
+  const dbClient = createBrowserClient()
 
   useEffect(() => {
     fetchAlerts()
@@ -83,7 +83,7 @@ export function GeofenceAlertManager() {
   }
 
   const setupRealtimeSubscription = () => {
-    const channel = supabase
+    const channel = Database
       .channel("geofence_alerts")
       .on("broadcast", { event: "geofence_alert" }, (payload) => {
         console.log("[v0] Received real-time geofence alert:", payload)
@@ -120,7 +120,7 @@ export function GeofenceAlertManager() {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      dbClient.removeChannel(channel)
     }
   }
 

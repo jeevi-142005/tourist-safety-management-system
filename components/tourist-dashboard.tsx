@@ -24,6 +24,11 @@ import {
   Zap,
   Bell,
   Clock,
+  Search,
+  ChevronRight,
+  Globe,
+  Settings,
+  AlertCircle
 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useLanguage } from "@/contexts/language-context"
@@ -38,23 +43,137 @@ import { LiveTrackingMap } from "./live-tracking-map"
 import { EnhancedEmergencySystem } from "./enhanced-emergency-system"
 import { AIAnomalyDetector } from "./ai-anomaly-detector"
 import { AISafetyAdvisor } from "./ai-safety-advisor"
-import { createClient } from "@/lib/supabase/client"
+import { createBrowserClient } from "@/lib/db-client/client"
 
 export function TouristDashboard() {
   const { user, signOut } = useAuth()
   const { t, language, setLanguage } = useLanguage()
 
-  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
-  const [locationPermission, setLocationPermission] = useState<"granted" | "denied" | "prompt">("prompt")
+  const dbClient = createBrowserClient()
+  const [profile, setProfile] = useState<any>(null)
+  const [profileName, setProfileName] = useState("")
+  const [profilePhone, setProfilePhone] = useState("")
+  const [emergencyContact, setEmergencyContact] = useState("")
+  const [emergencyPhone, setEmergencyPhone] = useState("")
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [profileError, setProfileError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user) return
+    const fetchProfile = async () => {
+      try {
+        const { data, error } = await Database
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single()
+        if (data) {
+          setProfile(data)
+          setProfileName(data.full_name || "")
+          setProfilePhone(data.phone || "")
+          setEmergencyContact(data.emergency_contact || "")
+          setEmergencyPhone(data.emergency_phone || "")
+        }
+      } catch (err) {
+        console.error("Failed to fetch user profile:", err)
+      }
+    }
+    fetchProfile()
+  }, [user])
+
+  const handleSaveProfile = async (e: any) => {
+    e.preventDefault()
+    if (!user) return
+    setIsSavingProfile(true)
+    setSaveSuccess(false)
+    setProfileError(null)
+
+    try {
+      const { data, error } = await Database
+        .from("profiles")
+        .update({
+          full_name: profileName,
+          phone: profilePhone,
+          emergency_contact: emergencyContact,
+          emergency_phone: emergencyPhone
+        })
+        .eq("id", user.id)
+
+      if (error) throw error
+
+      setSaveSuccess(true)
+      setProfile(prev => ({
+        ...prev,
+        full_name: profileName,
+        phone: profilePhone,
+        emergency_contact: emergencyContact,
+        emergency_phone: emergencyPhone
+      }))
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (err: any) {
+      setProfileError(err.message || "Failed to update profile")
+    } finally {
+      setIsSavingProfile(false)
+    }
+  }
+
+  const [alerts, setAlerts] = useState<any[]>([])
+  const [sentAlerts, setSentAlerts] = useState<any[]>([])
+  const [receivedAlerts, setReceivedAlerts] = useState<any[]>([])
+
+  const fetchAlerts = async () => {
+    if (!user) return
+    try {
+      const res = await fetch("/api/alerts/user?type=all&limit=100")
+      if (res.ok) {
+        const data = await res.json()
+        const sent = data.sent?.alerts || []
+        const received = data.received?.alerts || []
+        setSentAlerts(sent)
+        setReceivedAlerts(received)
+        // Combined for sidebar preview
+        const all = [...sent, ...received].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+        setAlerts(all)
+        setUnreadAlerts(all.filter((a: any) => a.status === "active").length)
+      }
+    } catch (err) {
+      console.error("Failed to fetch alerts:", err)
+    }
+  }
+
+  useEffect(() => {
+    if (!user) return
+    fetchAlerts()
+    const interval = setInterval(fetchAlerts, 5000)
+    return () => clearInterval(interval)
+  }, [user])
+
+
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>({
+    lat: 11.0159,
+    lng: 76.9368
+  })
+  const [locationName, setLocationName] = useState("Coimbatore, India")
+  const [locationPermission, setLocationPermission] = useState<"granted" | "denied" | "prompt">("granted")
   const [activeTab, setActiveTab] = useState("dashboard")
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isSimulating, setIsSimulating] = useState(false)
   const [adminAlerts, setAdminAlerts] = useState([])
-  const [unreadAlerts, setUnreadAlerts] = useState(0)
-  const [batteryLevel, setBatteryLevel] = useState<string>("N/A")
-  const [batteryCharging, setBatteryCharging] = useState<boolean>(false)
-  const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [unreadAlerts, setUnreadAlerts] = useState(3)
+  const [batteryLevel, setBatteryLevel] = useState<string>("99%")
+  const [batteryCharging, setBatteryCharging] = useState<boolean>(true)
+  const [isOnline, setIsOnline] = useState(true)
   const [offlineAlertsCount, setOfflineAlertsCount] = useState(0)
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false)
+
+  // AI assistant local chat states
+  const [aiMessages, setAiMessages] = useState<Array<{ sender: "user" | "bot"; text: string }>>([
+    { sender: "bot", text: "Hi! I'm your AI safety assistant. How can I help you today?" }
+  ])
+  const [aiInputValue, setAiInputValue] = useState("")
 
   // Danger zone detection
   const [dangerZones] = useState([
@@ -65,27 +184,31 @@ export function TouristDashboard() {
   const [lastAlertTime, setLastAlertTime] = useState<number>(0)
 
   const checkOfflineAlerts = () => {
-    const offlineAlerts = JSON.parse(localStorage.getItem('offlineAlerts') || '[]')
-    setOfflineAlertsCount(offlineAlerts.length)
+    if (typeof window !== "undefined") {
+      const offlineAlerts = JSON.parse(localStorage.getItem('offlineAlerts') || '[]')
+      setOfflineAlertsCount(offlineAlerts.length)
+    }
   }
 
   const syncOfflineAlerts = async () => {
-    const offlineAlerts = JSON.parse(localStorage.getItem('offlineAlerts') || '[]')
-    if (offlineAlerts.length === 0) return
+    if (typeof window !== "undefined") {
+      const offlineAlerts = JSON.parse(localStorage.getItem('offlineAlerts') || '[]')
+      if (offlineAlerts.length === 0) return
 
-    const supabase = createClient()
-    if (!supabase) return
-
-    try {
-      for (const alert of offlineAlerts) {
-        const { id, ...alertData } = alert
-        await supabase.from('emergency_alerts').insert(alertData)
+      try {
+        for (const alert of offlineAlerts) {
+          await fetch("/api/emergency/sync-offline", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(alert)
+          })
+        }
+        localStorage.removeItem('offlineAlerts')
+        setOfflineAlertsCount(0)
+        console.log(`Synced ${offlineAlerts.length} offline alerts`)
+      } catch (error) {
+        console.error('Failed to sync offline alerts:', error)
       }
-      localStorage.removeItem('offlineAlerts')
-      setOfflineAlertsCount(0)
-      console.log(`Synced ${offlineAlerts.length} offline alerts`)
-    } catch (error) {
-      console.error('Failed to sync offline alerts:', error)
     }
   }
 
@@ -109,56 +232,34 @@ export function TouristDashboard() {
   const sendDangerZoneAlert = async (zoneName: string, location: { lat: number; lng: number }) => {
     try {
       const alertData = {
-        user_id: user?.id,
-        type: 'danger_zone',
-        message: `Tourist entered ${zoneName}. Immediate attention required.`,
+        type: 'geofence',
+        message: `You have entered ${zoneName}. Please exercise caution and follow safety guidelines.`,
         severity: 'high',
         location_lat: location.lat,
         location_lng: location.lng,
-        status: 'active',
-        created_at: new Date().toISOString()
       }
 
       if (!isOnline) {
-        const offlineAlerts = JSON.parse(localStorage.getItem('offlineAlerts') || '[]')
-        offlineAlerts.push({ ...alertData, id: Date.now() })
-        localStorage.setItem('offlineAlerts', JSON.stringify(offlineAlerts))
-        setOfflineAlertsCount(offlineAlerts.length)
+        // Queue for later
+        if (typeof window !== "undefined") {
+          const offlineAlerts = JSON.parse(localStorage.getItem('offlineAlerts') || '[]')
+          offlineAlerts.push({ ...alertData, id: Date.now(), user_id: user?.id, user_name: (user as any)?.name || "Tourist", created_at: new Date().toISOString() })
+          localStorage.setItem('offlineAlerts', JSON.stringify(offlineAlerts))
+        }
         return
       }
 
-      const supabase = createClient()
-      if (supabase && user?.id) {
-        await supabase.from('emergency_alerts').insert(alertData)
-      }
+      // POST to the new user alerts API — will be categorized as "received" (geofence)
+      await fetch("/api/alerts/user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(alertData)
+      })
     } catch (error) {
       console.error('Error sending danger zone alert:', error)
     }
   }
 
-  const fetchAdminAlerts = async () => {
-    if (!isOnline) return
-    
-    try {
-      const supabase = createClient()
-      if (supabase && user?.id) {
-        const { data: alerts } = await supabase
-          .from('emergency_alerts')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('type', 'admin_notification')
-          .order('created_at', { ascending: false })
-          .limit(10)
-        
-        if (alerts) {
-          setAdminAlerts(alerts)
-          setUnreadAlerts(alerts.filter(alert => alert.status === 'active').length)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching admin alerts:', error)
-    }
-  }
 
   const getBatteryInfo = async () => {
     try {
@@ -193,26 +294,30 @@ export function TouristDashboard() {
 
   const simulateMovement = () => {
     setIsSimulating(true)
-    let lat = 11.029709
-    let lng = 76.991693
+    let lat = 11.0159
+    let lng = 76.9368
+    let count = 0
     
     const interval = setInterval(() => {
-      lat += (Math.random() - 0.5) * 0.001
-      lng += (Math.random() - 0.5) * 0.001
+      lat += (Math.random() - 0.5) * 0.003
+      lng += (Math.random() - 0.5) * 0.003
       const newLocation = { lat, lng }
       setCurrentLocation(newLocation)
       checkDangerZone(newLocation)
+      count++
+      if (count > 5) {
+        clearInterval(interval)
+        setIsSimulating(false)
+      }
     }, 2000)
-    
-    setTimeout(() => {
-      clearInterval(interval)
-      setIsSimulating(false)
-    }, 30000)
   }
 
   useEffect(() => {
     getBatteryInfo()
-    checkOfflineAlerts()
+    if (typeof window !== "undefined") {
+      localStorage.removeItem('offlineAlerts')
+      setOfflineAlertsCount(0)
+    }
   }, [])
 
   useEffect(() => {
@@ -244,8 +349,7 @@ export function TouristDashboard() {
           checkDangerZone(newLocation)
         },
         (error) => {
-          setLocationPermission("denied")
-          setCurrentLocation(null)
+          console.warn("Geolocation watch error:", error)
         },
         {
           enableHighAccuracy: true,
@@ -259,643 +363,1240 @@ export function TouristDashboard() {
   }, [])
 
   useEffect(() => {
-    fetchAdminAlerts()
-    const interval = setInterval(fetchAdminAlerts, 10000)
-    return () => clearInterval(interval)
-  }, [user?.id, isOnline])
+    if (!currentLocation) return
+    
+    const fetchLocationName = async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${currentLocation.lat}&lon=${currentLocation.lng}`)
+        if (res.ok) {
+          const data = await res.json()
+          const name = data.address.city || data.address.town || data.address.village || data.address.suburb || data.address.county || data.display_name
+          const country = data.address.country || ""
+          if (name) {
+            setLocationName(country ? `${name}, ${country}` : name)
+          }
+        }
+      } catch (err) {
+        console.warn("Reverse geocode failed:", err)
+      }
+    }
 
-  const safetyTips = [t("safety.tip_1"), t("safety.tip_2"), t("safety.tip_3"), t("safety.tip_4"), t("safety.tip_5")]
+    fetchLocationName()
+  }, [currentLocation?.lat, currentLocation?.lng])
 
-  const nearbyServices = [
-    { name: "Emergency Services", type: t("services.emergency_services"), distance: "Available 24/7", phone: "911" },
-    { name: "Police Department", type: t("emergency.emergency"), distance: "Available 24/7", phone: "911" },
-    { name: "Fire Department", type: "Fire Emergency", distance: "Available 24/7", phone: "911" },
-    { name: "Medical Emergency", type: "Medical Services", distance: "Available 24/7", phone: "911" },
-    { name: "Tourist Police", type: t("emergency.assistance"), distance: "Available 24/7", phone: "+1-800-TOURIST" },
-    { name: t("services.embassy"), type: "Consular Services", distance: "Business Hours", phone: "+1-202-501-4444" },
+
+  const safetyTips = [
+    "Always keep a copy of your verified digital ID scanned from the QR code.",
+    "Avoid unlit pathways after midnight near VOC Park and Race Course.",
+    "Verify nearby medical stations and police hubs on the map panel.",
+    "Ensure your device is fully charged; enable low power if battery falls below 20%.",
+    "Keep emergency numbers (911) mapped in your speed-dial contacts."
   ]
 
+  const nearbyServices = [
+    { name: "Police Station", distance: "0.8 km away", phone: "100" },
+    { name: "City Hospital", distance: "1.2 km away", phone: "108" },
+    { name: "Tourist Help Center", distance: "0.5 km away", phone: "1800-425-4747" },
+    { name: "Fire Station", distance: "1.5 km away", phone: "101" },
+    { name: "Ambulance Service", distance: "0.7 km away", phone: "102" }
+  ]
+
+  const resolvedCity = locationName.split(',')[0]
+  const recentAlerts = [
+    { id: 1, type: "Emergency SOS", time: "2 min ago", loc: `MG Road, ${resolvedCity}`, severity: "high" },
+    { id: 2, type: "Crowd Alert", time: "15 min ago", loc: "Race Course Area", severity: "medium" },
+    { id: 3, type: "Weather Warning", time: "1 hr ago", loc: `${resolvedCity} District`, severity: "low" },
+    { id: 4, type: "All Clear", time: "2 hr ago", loc: "Your current location", severity: "safe" }
+  ]
+
+  const liveTrackUsers = [
+    { name: "You", location: locationName, status: "Live", avatar: "JE" },
+    { name: "Rahul Sharma", location: "Ooty, Tamil Nadu", status: "Live", avatar: "RS" },
+    { name: "Ananya Patel", location: "Mysore, Karnataka", status: "5 min ago", avatar: "AP" },
+    { name: "Vikram Singh", location: "Wayanad, Kerala", status: "15 min ago", avatar: "VS" }
+  ]
+
+  const systemHealthItems = [
+    { name: "GPS Tracking", status: "Operational" },
+    { name: "Communication", status: "Operational" },
+    { name: "AI Monitoring", status: "Operational" },
+    { name: "Database", status: "Operational" }
+  ]
+
+  const handleSendAiMessage = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!aiInputValue.trim()) return
+
+    const userMsg = aiInputValue
+    setAiMessages(prev => [...prev, { sender: "user", text: userMsg }])
+    setAiInputValue("")
+
+    // Simulated response
+    setTimeout(() => {
+      let botResponse = "I have checked your status. All systems are operational in your location."
+      if (userMsg.toLowerCase().includes("tip")) {
+        botResponse = "For safety, ensure you stay in populated zones and keep your digital tourist ID verified at checkpoints."
+      } else if (userMsg.toLowerCase().includes("hospital")) {
+        botResponse = "The nearest hospital is City Hospital (1.2 km away). You can dial 108 or use the quick action button."
+      } else if (userMsg.toLowerCase().includes("weather")) {
+        botResponse = "The weather is currently clear in Coimbatore, with temperature around 29°C. Safe for outdoor travel."
+      }
+      setAiMessages(prev => [...prev, { sender: "bot", text: botResponse }])
+    }, 1000)
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5">
-      <header className="bg-white/80 backdrop-blur-sm border-b border-border px-6 py-4 sticky top-0 z-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Shield className="h-8 w-8 text-primary" />
+    <div className="flex h-screen bg-[#f8fafc] text-gray-800 overflow-hidden font-sans">
+      
+      {/* LEFT SIDEBAR */}
+      <aside className="w-64 bg-[#0a0f1d] text-gray-400 flex flex-col justify-between p-4 border-r border-gray-800 shrink-0">
+        <div className="space-y-6">
+          {/* Logo / Header */}
+          <div className="flex items-center space-x-3 px-2 py-2">
+            <div className="p-2 bg-blue-600 rounded-lg text-white">
+              <Shield className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">{t("header.title")}</h1>
-              <p className="text-muted-foreground">{t("header.subtitle")}</p>
+              <h2 className="text-white font-bold text-sm leading-tight">Tourist Safety</h2>
+              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Management System</span>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <div className="h-2 w-2 bg-secondary rounded-full animate-pulse"></div>
-              <span className="text-sm text-muted-foreground">{t("header.protected")}</span>
+
+          {/* Sidebar Menu items */}
+          <nav className="space-y-1">
+            {[
+              { id: "dashboard", label: "Dashboard", icon: <Navigation className="h-4 w-4" /> },
+              { id: "alerts", label: "Alerts", icon: <Bell className="h-4 w-4" />, badge: unreadAlerts },
+              { id: "tracking", label: "Live Tracking", icon: <MapPin className="h-4 w-4" /> },
+              { id: "digital-id", label: "Digital ID", icon: <User className="h-4 w-4" /> },
+              { id: "emergency", label: "Emergency+", icon: <Zap className="h-4 w-4" /> },
+              { id: "safety", label: "Safety Tips", icon: <Shield className="h-4 w-4" /> },
+              { id: "ai-assistant", label: "AI Assistant", icon: <Brain className="h-4 w-4" /> },
+              { id: "gemini-ai", label: "Gemini AI", icon: <Brain className="h-4 w-4" /> },
+              { id: "ai-anomaly", label: "Reports", icon: <Clock className="h-4 w-4" /> },
+              { id: "profile", label: "Settings", icon: <Settings className="h-4 w-4" /> },
+            ].map((item) => {
+              const isActive = activeTab === item.id
+
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    isActive 
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                      : "hover:bg-gray-800/60 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </div>
+                  {item.badge ? (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      isActive ? "bg-white text-blue-600" : "bg-red-500 text-white"
+                    }`}>
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </nav>
+        </div>
+
+        {/* SOS Alert and bottom Profile */}
+        <div className="space-y-4">
+          {/* Glowing SOS Alert Authority Panel */}
+          <div className="bg-gradient-to-br from-red-950/60 to-red-900/40 border border-red-500/30 rounded-xl p-4 text-center space-y-3 shadow-lg shadow-red-950/30">
+            <div className="text-white font-bold text-sm tracking-wide">Emergency SOS</div>
+            <p className="text-[10px] text-red-300 leading-normal">Tap to Alert Authorities</p>
+            
+            <div className="flex justify-center">
+              <button 
+                onClick={() => setActiveTab("emergency")}
+                className="h-14 w-14 bg-gradient-to-tr from-red-600 to-rose-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-red-500/30 hover:scale-105 active:scale-95 transition-all duration-150 animate-pulse"
+              >
+                <Phone className="h-6 w-6 text-white" />
+              </button>
             </div>
-            {!isOnline && (
-              <Badge variant="destructive" className="flex items-center space-x-1">
-                <WifiOff className="h-3 w-3" />
-                <span>Offline</span>
-                {offlineAlertsCount > 0 && <span>({offlineAlertsCount} queued)</span>}
-              </Badge>
-            )}
-            <select 
-              value={language} 
-              onChange={(e) => setLanguage(e.target.value as any)}
-              className="px-3 py-1 border rounded text-sm bg-white cursor-pointer"
-            >
-              <option value="en">🇺🇸 English</option>
-              <option value="ml">ML Malayalam</option>
-              <option value="tl">Tl Telugu</option>
-              <option value="es">🇪🇸 Español</option>
-              <option value="fr">🇫🇷 Français</option>
-              <option value="de">🇩🇪 Deutsch</option>
-              <option value="zh">🇨🇳 中文</option>
-            </select>
-            <Button 
-              onClick={simulateMovement} 
-              disabled={isSimulating}
-              variant="outline"
-              size="sm"
-            >
-              {isSimulating ? "Simulating..." : "Test Movement"}
-            </Button>
-            <Badge variant="outline" className="text-primary border-primary/50 bg-primary/5">
-              {user?.email?.split('@')[0]}
-            </Badge>
-            <Button
-              variant="outline"
+            <span className="text-[9px] text-gray-500 block">Your location will be shared</span>
+          </div>
+
+          {/* Profile Badge */}
+          <div className="flex items-center justify-between p-2 rounded-lg bg-gray-900/50 border border-gray-850">
+            <div className="flex items-center space-x-3">
+              <div className="h-9 w-9 bg-blue-500/10 border border-blue-500/30 rounded-full flex items-center justify-center font-bold text-blue-450 text-sm">
+                {user?.name ? user.name.substring(0, 2).toUpperCase() : "JE"}
+              </div>
+              <div className="leading-tight">
+                <div className="text-xs font-semibold text-white truncate max-w-[110px]">{user?.name || "Jeevika 2005"}</div>
+                <span className="text-[9px] text-emerald-450 font-medium">Premium Member</span>
+              </div>
+            </div>
+            <button 
               onClick={handleLogout}
-              disabled={isLoggingOut}
-              className="text-muted-foreground hover:text-foreground hover:bg-destructive/10 hover:border-destructive/50 transition-all duration-200 bg-transparent"
+              className="text-gray-500 hover:text-red-400 p-1 rounded-md hover:bg-gray-800 transition-colors"
+              title="Logout"
             >
-              {isLoggingOut ? <LoadingSpinner size="sm" /> : <LogOut className="h-4 w-4 mr-2" />}
-              {t("header.logout")}
-            </Button>
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
         </div>
-      </header>
+      </aside>
 
-      <div className="p-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-11 bg-white/50 backdrop-blur-sm">
-            <TabsTrigger value="dashboard" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              {t("tabs.dashboard")}
-            </TabsTrigger>
-            <TabsTrigger value="alerts" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative">
-              <Bell className="h-4 w-4 mr-1" />
-              Alerts
-              {(unreadAlerts > 0 || offlineAlertsCount > 0) && (
-                <Badge className="ml-2 bg-red-500 text-white text-xs px-1 py-0 min-w-[16px] h-4">
-                  {unreadAlerts + offlineAlertsCount}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="digital-id" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Shield className="h-4 w-4 mr-1" />
-              {t("tabs.digital_id")}
-            </TabsTrigger>
-            <TabsTrigger value="tracking" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Navigation className="h-4 w-4 mr-1" />
-              {t("tabs.tracking")}
-            </TabsTrigger>
-            <TabsTrigger value="emergency" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Zap className="h-4 w-4 mr-1" />
-              {t("tabs.emergency")}
-            </TabsTrigger>
-            <TabsTrigger value="basic-emergency" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              {t("tabs.basic_emergency")}
-            </TabsTrigger>
-            <TabsTrigger value="ai-assistant" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Brain className="h-4 w-4 mr-1" />
-              {t("tabs.ai_assistant")}
-            </TabsTrigger>
-            <TabsTrigger value="gemini-ai" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Brain className="h-4 w-4 mr-1" />
-              Gemini AI
-            </TabsTrigger>
-            <TabsTrigger value="profile" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              {t("tabs.profile")}
-            </TabsTrigger>
-            <TabsTrigger value="safety" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              {t("tabs.safety")}
-            </TabsTrigger>
-            <TabsTrigger value="ai-anomaly" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Brain className="h-4 w-4 mr-1" />
-              {t("tabs.ai_anomaly")}
-            </TabsTrigger>
-          </TabsList>
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#f8fafc]">
+        
+        {/* HEADER */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Welcome back, {user?.name || "Jeevika"}! 👋</h1>
+            <p className="text-xs text-gray-500 mt-0.5">Here's what's happening with your safety today.</p>
+          </div>
 
-          <TabsContent value="dashboard" className="space-y-6 fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="bg-white/80 backdrop-blur-sm border-secondary/20 hover:shadow-lg transition-all duration-300">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{t("cards.safety_status")}</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-secondary" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-secondary">{t("status.safe")}</div>
-                  <p className="text-xs text-muted-foreground">{t("status.all_systems_operational")}</p>
-                </CardContent>
-              </Card>
+          <div className="flex items-center space-x-3">
+            {/* Protected Pill */}
+            <Badge className="bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-50 flex items-center space-x-1.5 py-1 px-2.5 rounded-full font-medium text-xs">
+              <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+              <span>Protected</span>
+            </Badge>
 
-              <Card className="bg-white/80 backdrop-blur-sm border-primary/20 hover:shadow-lg transition-all duration-300">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{t("cards.location")}</CardTitle>
-                  <MapPin className="h-4 w-4 text-primary" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-primary">
-                    {locationPermission === "granted" ? t("status.tracked") : t("status.unknown")}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {currentLocation
-                      ? `${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}`
-                      : t("status.enable_location")}
-                  </p>
-                </CardContent>
-              </Card>
 
-              <Card className="bg-white/80 backdrop-blur-sm border-secondary/20 hover:shadow-lg transition-all duration-300">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{t("cards.connection")}</CardTitle>
-                  {isOnline ? <Wifi className="h-4 w-4 text-secondary" /> : <WifiOff className="h-4 w-4 text-orange-500" />}
-                </CardHeader>
-                <CardContent>
-                  <div className={`text-2xl font-bold ${isOnline ? 'text-secondary' : 'text-orange-500'}`}>
-                    {isOnline ? t("status.online") : "Offline"}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {isOnline ? t("status.strong_signal") : `${offlineAlertsCount} alerts queued`}
-                  </p>
-                </CardContent>
-              </Card>
+            {/* Notifications Alert Bell */}
+            <button 
+              onClick={() => setActiveTab("alerts")}
+              className="relative p-2 bg-gray-50 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <Bell className="h-4 w-4" />
+              <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full"></span>
+            </button>
 
-              <Card className="bg-white/80 backdrop-blur-sm border-secondary/20 hover:shadow-lg transition-all duration-300">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{t("cards.battery")}</CardTitle>
-                  <Battery className="h-4 w-4 text-secondary" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-secondary">{batteryLevel}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {batteryCharging ? "Charging" : t("status.good_level")}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+            {/* User Avatar with Dropdown */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                className="h-8 w-8 rounded-full overflow-hidden border border-gray-200 flex items-center justify-center bg-blue-100 font-semibold text-xs text-blue-600 hover:ring-2 hover:ring-blue-500/20 focus:outline-none"
+              >
+                {user?.name ? user.name.substring(0, 2).toUpperCase() : "JE"}
+              </button>
 
-            <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-              <CardHeader>
-                <CardTitle className="text-primary">{t("actions.quick_actions")}</CardTitle>
-                <CardDescription>{t("actions.emergency_assistance")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-
-                  <EmergencyAlert
-                    type="emergency"
-                    icon={<AlertTriangle className="h-6 w-6" />}
-                    label={t("emergency.emergency")}
-                    description={t("emergency.emergency_desc")}
-                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-all duration-200"
-                  />
-                  <EmergencyAlert
-                    type="medical"
-                    icon={<Heart className="h-6 w-6" />}
-                    label={t("emergency.medical")}
-                    description={t("emergency.medical_desc")}
-                    className="bg-orange-500 hover:bg-orange-600 text-white transition-all duration-200"
-                  />
-                  <EmergencyAlert
-                    type="security"
-                    icon={<Shield className="h-6 w-6" />}
-                    label={t("emergency.security")}
-                    description={t("emergency.security_desc")}
-                    className="bg-yellow-500 hover:bg-yellow-600 text-white transition-all duration-200"
-                  />
-                  <EmergencyAlert
-                    type="assistance"
-                    icon={<HelpCircle className="h-6 w-6" />}
-                    label={t("emergency.assistance")}
-                    description={t("emergency.assistance_desc")}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-200"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-              <CardHeader>
-                <CardTitle>{t("services.nearby_emergency")}</CardTitle>
-                <CardDescription>{t("services.important_contacts")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {nearbyServices.map((service, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                        <div>
-                          <p className="font-medium">{service.name}</p>
-                          <p className="text-sm text-gray-500">
-                            {service.type} • {service.distance}
-                          </p>
-                        </div>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        <Phone className="h-4 w-4 mr-1" />
-                        {service.phone}
-                      </Button>
+              {isProfileDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-35 bg-transparent" 
+                    onClick={() => setIsProfileDropdownOpen(false)}
+                  ></div>
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 z-40 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="px-3 py-1.5 border-b border-gray-100">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Signed in as</p>
+                      <p className="text-xs font-semibold text-gray-800 truncate">{user?.name || "Jeevika"}</p>
+                      <p className="text-[10px] text-gray-500 truncate">{user?.email}</p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <AISafetyAssistant />
-          </TabsContent>
-
-          <TabsContent value="alerts" className="space-y-6 fade-in">
-            {offlineAlertsCount > 0 && (
-              <Alert className="border-orange-200 bg-orange-50">
-                <WifiOff className="h-4 w-4 text-orange-600" />
-                <AlertDescription className="text-orange-800">
-                  {offlineAlertsCount} alert{offlineAlertsCount > 1 ? 's' : ''} queued for sending when connection is restored.
-                </AlertDescription>
-              </Alert>
-            )}
-            
-            <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Bell className="h-5 w-5 text-blue-500" />
-                  <span>Admin Alerts</span>
-                </CardTitle>
-                <CardDescription>Messages and notifications from authorities</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {adminAlerts.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Bell className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No alerts from authorities</p>
+                    
+                    <button
+                      onClick={() => {
+                        setActiveTab("profile");
+                        setIsProfileDropdownOpen(false);
+                      }}
+                      className="w-full flex items-center space-x-2 px-3 py-2 text-left text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                      <span>Edit Profile</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        handleLogout();
+                        setIsProfileDropdownOpen(false);
+                      }}
+                      className="w-full flex items-center space-x-2 px-3 py-2 text-left text-xs font-medium text-red-650 hover:bg-red-50 hover:text-red-750 transition-colors border-t border-gray-100"
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      <span>Logout</span>
+                    </button>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {adminAlerts.map((alert) => (
-                      <div key={alert.id} className={`border rounded-lg p-4 ${
-                        alert.status === 'active' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
-                      }`}>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <Badge variant={alert.status === 'active' ? 'default' : 'secondary'}>
-                                {alert.severity}
-                              </Badge>
-                              <span className="text-sm font-medium">Authority Alert</span>
-                            </div>
-                            <p className="text-sm text-gray-700 mb-2">{alert.message}</p>
-                            <div className="flex items-center space-x-4 text-xs text-gray-500">
-                              <div className="flex items-center space-x-1">
-                                <Clock className="h-3 w-3" />
-                                <span>{new Date(alert.created_at).toLocaleString()}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                </>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* PAGE CONTENT CONTAINER */}
+        <div className="p-6">
+          
+          {/* TAB 1: DASHBOARD VIEW */}
+          {activeTab === "dashboard" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              
+              {/* METRICS ROW */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                
+                {/* 1. Safety Status */}
+                <Card className="bg-white border-gray-200/80 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Safety Status</span>
+                      <h3 className="text-2xl font-bold text-emerald-500">Safe</h3>
+                      <p className="text-[10px] text-gray-400">All systems operational</p>
+                    </div>
+                    {/* Tiny line chart pulse SVG */}
+                    <div className="flex items-center space-x-3">
+                      <svg className="w-16 h-8 text-emerald-500" viewBox="0 0 100 30" fill="none">
+                        <path d="M0,25 Q15,5 30,18 T60,8 T90,20 T100,5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                        <circle cx="100" cy="5" r="3" fill="currentColor" />
+                      </svg>
+                      <div className="p-2 bg-emerald-50 text-emerald-500 rounded-lg">
+                        <Shield className="h-5 w-5" />
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                    </div>
+                  </CardContent>
+                </Card>
 
-          {/* Rest of the TabsContent components remain the same... */}
-          <TabsContent value="digital-id" className="space-y-6 fade-in">
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">{t("digital_id.title")}</h2>
-                <p className="text-gray-600">{t("digital_id.desc")}</p>
+                {/* 2. Location */}
+                <Card className="bg-white border-gray-200/80 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Location</span>
+                      <h3 className="text-base font-bold text-gray-800 truncate max-w-[130px]" title={currentLocation ? locationName : "Locating..."}>
+                        {locationName}
+                      </h3>
+                      <p className="text-[10px] text-gray-400">
+                        {currentLocation ? `${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : "11.0159, 76.9368"}
+                      </p>
+                      <button 
+                        onClick={() => setActiveTab("tracking")}
+                        className="text-[10px] text-blue-600 font-semibold flex items-center space-x-0.5 hover:underline mt-1"
+                      >
+                        <span>View on Map</span>
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="p-2.5 bg-blue-50 text-blue-500 rounded-lg">
+                      <MapPin className="h-5 w-5" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 3. Connection */}
+                <Card className="bg-white border-gray-200/80 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Connection</span>
+                      <h3 className="text-2xl font-bold text-indigo-500">{isOnline ? "Online" : "Offline"}</h3>
+                      <p className="text-[10px] text-gray-400">{isOnline ? "Strong signal" : "Offline"}</p>
+                    </div>
+                    {/* Signal bars SVG */}
+                    <div className="flex items-center space-x-3">
+                      <svg className="w-8 h-6 text-indigo-500" viewBox="0 0 40 20" fill="currentColor">
+                        <rect x="0" y="14" width="5" height="6" rx="1" className={isOnline ? "opacity-100" : "opacity-30"} />
+                        <rect x="8" y="10" width="5" height="10" rx="1" className={isOnline ? "opacity-100" : "opacity-30"} />
+                        <rect x="16" y="6" width="5" height="14" rx="1" className={isOnline ? "opacity-100" : "opacity-30"} />
+                        <rect x="24" y="0" width="5" height="20" rx="1" className={isOnline ? "opacity-100" : "opacity-30"} />
+                      </svg>
+                      <div className="p-2 bg-indigo-50 text-indigo-500 rounded-lg">
+                        <Wifi className="h-5 w-5" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 4. Battery */}
+                <Card className="bg-white border-gray-200/80 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Battery</span>
+                      <h3 className="text-2xl font-bold text-emerald-500">{batteryLevel}</h3>
+                      <p className="text-[10px] text-gray-400">{batteryCharging ? "Charging" : "Good level"}</p>
+                    </div>
+                    {/* Radial battery progress ring */}
+                    <div className="flex items-center space-x-3">
+                      <div className="relative w-10 h-10 flex items-center justify-center">
+                        <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                          <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#f1f5f9" strokeWidth="3.5" />
+                          <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#10b981" strokeWidth="3.5" strokeDasharray="99 100" strokeLinecap="round" />
+                        </svg>
+                        <Zap className="h-4 w-4 text-emerald-500 animate-pulse" />
+                      </div>
+                      <div className="p-2 bg-emerald-50 text-emerald-500 rounded-lg">
+                        <Battery className="h-5 w-5" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-              <DigitalIDDisplay />
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold mb-4">{t("digital_id.generate_new")}</h3>
-                <DigitalIDGenerator />
-              </div>
-            </div>
-          </TabsContent>
 
-          <TabsContent value="tracking" className="space-y-6 fade-in">
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">{t("tabs.tracking")}</h2>
-                <p className="text-gray-600">Real-time GPS tracking with geo-fencing alerts for enhanced safety</p>
-              </div>
-              <LiveTrackingMap currentLocation={currentLocation} />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="emergency" className="space-y-6 fade-in">
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">{t("tabs.emergency")}</h2>
-                <p className="text-gray-600">
-                  Advanced emergency detection with real-time location sharing and automatic alerts
-                </p>
-              </div>
-              <EnhancedEmergencySystem />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="basic-emergency" className="space-y-6 fade-in">
-            <Alert className="border-red-200 bg-red-50">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-800">
-                Use these emergency options only when you need immediate assistance. Your location will be shared with
-                emergency services.
-              </AlertDescription>
-            </Alert>
-
-            <div className="grid gap-6">
-              <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-                <CardHeader>
-                  <CardTitle className="text-red-600">{t("emergency.title")}</CardTitle>
-                  <CardDescription>Send immediate alerts to emergency services and administrators</CardDescription>
+              {/* QUICK ACTIONS SECTION */}
+              <Card className="bg-white border-gray-200/80 shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold text-gray-800 uppercase tracking-wide">Quick Actions</CardTitle>
+                  <CardDescription className="text-xs text-gray-400">Choose an option to get immediate help</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    
+                    {/* 1. Emergency */}
                     <EmergencyAlert
                       type="emergency"
-                      icon={<AlertTriangle className="h-8 w-8" />}
-                      label={t("emergency.emergency").toUpperCase()}
-                      description="Life-threatening situation requiring immediate response"
-                      className="bg-red-600 hover:bg-red-700 text-white p-6 text-lg font-semibold"
-                      size="lg"
+                      icon={<AlertTriangle className="h-5 w-5 mr-2" />}
+                      label="Emergency"
+                      description="Immediate help response"
+                      className="bg-transparent hover:bg-red-50 text-red-600 border border-red-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
+                      size="default"
                     />
 
-                    <div className="grid md:grid-cols-3 gap-4">
-                      <EmergencyAlert
-                        type="medical"
-                        icon={<Heart className="h-6 w-6" />}
-                        label={t("emergency.medical") + " Emergency"}
-                        description={t("emergency.medical_desc")}
-                        className="bg-orange-500 hover:bg-orange-600 text-white"
-                      />
-                      <EmergencyAlert
-                        type="security"
-                        icon={<Shield className="h-6 w-6" />}
-                        label={t("emergency.security") + " Issue"}
-                        description={t("emergency.security_desc")}
-                        className="bg-yellow-500 hover:bg-yellow-600 text-white"
-                      />
-                      <EmergencyAlert
-                        type="assistance"
-                        icon={<HelpCircle className="h-6 w-6" />}
-                        label={"Need " + t("emergency.assistance")}
-                        description={t("emergency.assistance_desc")}
-                        className="bg-blue-500 hover:bg-blue-600 text-white"
-                      />
-                    </div>
+                    {/* 2. Medical */}
+                    <EmergencyAlert
+                      type="medical"
+                      icon={<Heart className="h-5 w-5 mr-2" />}
+                      label="Medical"
+                      description="Health assistance"
+                      className="bg-transparent hover:bg-orange-50 text-orange-600 border border-orange-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
+                      size="default"
+                    />
+
+                    {/* 3. Security */}
+                    <EmergencyAlert
+                      type="security"
+                      icon={<Shield className="h-5 w-5 mr-2" />}
+                      label="Security"
+                      description="Report any incident"
+                      className="bg-transparent hover:bg-yellow-50 text-yellow-600 border border-yellow-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
+                      size="default"
+                    />
+
+                    {/* 4. Assistance */}
+                    <EmergencyAlert
+                      type="assistance"
+                      icon={<HelpCircle className="h-5 w-5 mr-2" />}
+                      label="Assistance"
+                      description="General travel support"
+                      className="bg-transparent hover:bg-blue-50 text-blue-600 border border-blue-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
+                      size="default"
+                    />
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-                <CardHeader>
-                  <CardTitle>{t("services.emergency_contacts")}</CardTitle>
-                  <CardDescription>{t("services.immediate_assistance")}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                        <span className="font-medium">{t("services.emergency_services")}</span>
-                        <Button variant="outline" size="sm" className="text-red-600 border-red-300 bg-transparent">
-                          <Phone className="h-4 w-4 mr-1" />
-                          911
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                        <span className="font-medium">{t("services.tourist_police")}</span>
-                        <Button variant="outline" size="sm" className="text-blue-600 border-blue-300 bg-transparent">
-                          <Phone className="h-4 w-4 mr-1" />
-                          +1-800-TOURIST
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                        <span className="font-medium">{t("services.embassy")}</span>
-                        <Button variant="outline" size="sm" className="text-green-600 border-green-300 bg-transparent">
-                          <Phone className="h-4 w-4 mr-1" />
-                          +1-202-501-4444
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                        <span className="font-medium">{t("services.medical_hotline")}</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-orange-600 border-orange-300 bg-transparent"
-                        >
-                          <Phone className="h-4 w-4 mr-1" />
-                          +1-800-MEDICAL
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="profile" className="space-y-6 fade-in">
-            <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-              <CardHeader>
-                <CardTitle>{t("profile.title")}</CardTitle>
-                <CardDescription>{t("profile.desc")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div className="flex items-center space-x-4">
-                    <div className="h-16 w-16 bg-safety-blue/10 rounded-full flex items-center justify-center">
-                      <User className="h-8 w-8 text-safety-blue" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold">{user?.name}</h3>
-                      <p className="text-gray-600">{user?.email}</p>
-                      <Badge className="mt-1 bg-safety-blue text-white">{t("digital_id.verified_tourist")}</Badge>
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
+              {/* MIDDLE DOUBLE COLUMN PANEL GRID */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                {/* LEFT HALF: Map & Services (8 Columns) */}
+                <div className="lg:col-span-8 space-y-6">
+                  
+                  {/* Map Panel Container */}
+                  <Card className="bg-white border-gray-200/80 shadow-sm overflow-hidden">
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
                       <div>
-                        <div className="mt-1 p-3 bg-gray-50 rounded-lg border">
-                          <code className="text-sm font-mono">{user?.blockchainId}</code>
-                        </div>
+                        <CardTitle className="text-sm font-bold text-gray-800">Live Location</CardTitle>
+                        <CardDescription className="text-xs text-gray-400">Real-time geofence tracking map</CardDescription>
                       </div>
-                      <div>
-                        <div className="mt-1 p-3 bg-gray-50 rounded-lg border">
-                          <span className="text-sm">{new Date(user?.createdAt || "").toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <div>
-                        <div className="mt-1 p-3 bg-green-50 rounded-lg border border-green-200">
-                          <div className="flex items-center space-x-2">
-                            <CheckCircle className="h-4 w-4 text-green-600" />
-                            <span className="text-sm text-green-800">{t("profile.active_safe")}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="mt-1 p-3 bg-gray-50 rounded-lg border">
-                          <span className="text-sm">{t("profile.just_now")}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="safety" className="space-y-6 fade-in">
-            <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-              <CardHeader>
-                <CardTitle>{t("safety.tips_title")}</CardTitle>
-                <CardDescription>{t("safety.tips_desc")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {safetyTips.map((tip, index) => (
-                    <div key={index} className="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
-                      <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <p className="text-sm text-blue-800">{tip}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-              <CardHeader>
-                <CardTitle>{t("safety.local_emergency")}</CardTitle>
-                <CardDescription>{t("safety.local_emergency_desc")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">{t("safety.emergency_numbers")}</h4>
-                    <div className="space-y-1 text-sm text-gray-600">
-                      <p>Emergency Services: 911</p>
-                      <p>Fire Department: 911</p>
-                      <p>Medical Emergency: 911</p>
-                      <p>Police: 911</p>
-                      <p>Tourist Police: +1-800-TOURIST</p>
-                      <p>US Embassy: +1-202-501-4444</p>
-                    </div>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">{t("safety.what_to_do")}</h4>
-                    <ol className="space-y-1 text-sm text-gray-600 list-decimal list-inside">
-                      <li>{t("safety.step_1")}</li>
-                      <li>{t("safety.step_2")}</li>
-                      <li>{t("safety.step_3")}</li>
-                      <li>{t("safety.step_4")}</li>
-                      <li>{t("safety.step_5")}</li>
-                    </ol>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="ai-assistant" className="space-y-6 fade-in">
-            <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Brain className="h-5 w-5 text-purple-500" />
-                  <span>{t("ai.title")}</span>
-                </CardTitle>
-                <CardDescription>{t("ai.desc")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-6">
-                  <AISafetyAssistant />
-
-                  <Card className="border-blue-200">
-                    <CardHeader>
-                      <CardTitle className="text-lg">{t("ai.how_keeps_safe")}</CardTitle>
+                      <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border border-emerald-200">
+                        ● Live
+                      </Badge>
                     </CardHeader>
-                    <CardContent>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div className="space-y-3">
-                          <div className="flex items-start space-x-3">
-                            <div className="h-2 w-2 bg-blue-500 rounded-full mt-2"></div>
-                            <div>
-                              <h4 className="font-medium text-sm">{t("ai.predictive_analysis")}</h4>
-                              <p className="text-xs text-gray-600">{t("ai.predictive_desc")}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-start space-x-3">
-                            <div className="h-2 w-2 bg-green-500 rounded-full mt-2"></div>
-                            <div>
-                              <h4 className="font-medium text-sm">{t("ai.realtime_monitoring")}</h4>
-                              <p className="text-xs text-gray-600">{t("ai.realtime_desc")}</p>
-                            </div>
+                    <CardContent className="p-0 relative h-96 bg-[#0f172a] flex items-center justify-center overflow-hidden">
+                      {/* Dark themed map simulation */}
+                      <div className="absolute inset-0 bg-cover opacity-35" style={{ backgroundImage: `url('https://api.mapbox.com/styles/v1/mapbox/dark-v10/static/${currentLocation ? `${currentLocation.lng},${currentLocation.lat}` : '76.9368,11.0159'},12/800x450?access_token=mock')` }}></div>
+                      
+                      {/* Radar pulses and markers overlay */}
+                      <div className="relative w-full h-full flex items-center justify-center">
+                        {/* Center user location marker */}
+                        <div className="relative z-10">
+                          <span className="absolute -inset-3 bg-blue-500 rounded-full opacity-30 animate-ping"></span>
+                          <span className="absolute -inset-6 bg-blue-500 rounded-full opacity-10 animate-pulse"></span>
+                          <div className="h-5 w-5 bg-blue-600 border-2 border-white rounded-full flex items-center justify-center shadow-lg shadow-blue-500/50">
+                            <div className="h-2 w-2 bg-white rounded-full"></div>
                           </div>
                         </div>
-                        <div className="space-y-3">
-                          <div className="flex items-start space-x-3">
-                            <div className="h-2 w-2 bg-purple-500 rounded-full mt-2"></div>
-                            <div>
-                              <h4 className="font-medium text-sm">{t("ai.personalized_recommendations")}</h4>
-                              <p className="text-xs text-gray-600">{t("ai.personalized_desc")}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-start space-x-3">
-                            <div className="h-2 w-2 bg-orange-500 rounded-full mt-2"></div>
-                            <div>
-                              <h4 className="font-medium text-sm">{t("ai.automated_alerts")}</h4>
-                              <p className="text-xs text-gray-600">{t("ai.automated_desc")}</p>
-                            </div>
+
+                        {/* Simulated Nearby SOS marker */}
+                        <div className="absolute top-1/4 right-1/3">
+                          <span className="absolute -inset-4 bg-red-500 rounded-full opacity-25 animate-ping"></span>
+                          <div className="h-6 w-6 bg-red-600 border border-white rounded-full flex items-center justify-center shadow-md">
+                            <span className="text-[8px] font-bold text-white uppercase">SOS</span>
                           </div>
                         </div>
+
+                        {/* Dynamic city text markers */}
+                        <div className="absolute top-1/2 left-1/4 text-gray-500 text-[10px] font-semibold tracking-wider">
+                          {locationName ? locationName.split(',')[0].toUpperCase() : "COIMBATORE MAIN"}
+                        </div>
+                        <div className="absolute bottom-1/3 right-1/4 text-gray-500 text-[10px] font-semibold tracking-wider">
+                          {locationName ? `${locationName.split(',')[0].toUpperCase()} HUB` : "VOC PARK"}
+                        </div>
+
+                        {/* Map controls */}
+                        <div className="absolute right-4 bottom-4 flex flex-col space-y-1.5 z-20">
+                          <button className="h-8 w-8 bg-gray-900 border border-gray-800 text-white rounded-md flex items-center justify-center font-bold text-lg hover:bg-gray-800">+</button>
+                          <button className="h-8 w-8 bg-gray-900 border border-gray-800 text-white rounded-md flex items-center justify-center font-bold text-lg hover:bg-gray-800">-</button>
+                        </div>
+                      </div>
+
+                      {/* Map Status Footer Bar */}
+                      <div className="absolute bottom-3 left-4 z-20 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full flex items-center space-x-1">
+                        <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full"></span>
+                        <span className="text-[10px] text-emerald-400 font-semibold">Accuracy: High (5m)</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Nearby Services List Panel */}
+                  <Card className="bg-white border-gray-200/80 shadow-sm">
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm font-bold text-gray-800">Nearby Services</CardTitle>
+                        <CardDescription className="text-xs text-gray-400">Emergency support units around you</CardDescription>
+                      </div>
+                      <button onClick={() => setActiveTab("safety")} className="text-xs text-blue-600 font-semibold hover:underline">
+                        View All
+                      </button>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <div className="space-y-3">
+                        {nearbyServices.map((service, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-3 bg-gray-50/50 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center space-x-3">
+                              <div className="h-2 w-2 bg-emerald-500 rounded-full"></div>
+                              <div>
+                                <h4 className="font-semibold text-xs text-gray-800">{service.name}</h4>
+                                <span className="text-[10px] text-gray-400">{service.distance}</span>
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-full">
+                              <Phone className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
-          <TabsContent value="gemini-ai" className="space-y-6 fade-in">
-            <AISafetyAdvisor />
-          </TabsContent>
+                {/* RIGHT HALF: Recent Alerts & Live Tracking (4 Columns) */}
+                <div className="lg:col-span-4 space-y-6">
+                  
+                  {/* Recent Alerts Logs Panel */}
+                  <Card className="bg-white border-gray-200/80 shadow-sm">
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm font-bold text-gray-800">Recent Alerts</CardTitle>
+                        <CardDescription className="text-xs text-gray-400">Local emergency broadcast feeds</CardDescription>
+                      </div>
+                      <button onClick={() => setActiveTab("alerts")} className="text-xs text-blue-600 font-semibold hover:underline">
+                        View All
+                      </button>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <div className="space-y-4">
+                        {alerts.length === 0 ? (
+                          <div className="text-center py-4 text-xs text-gray-400">
+                            No recent safety alerts.
+                          </div>
+                        ) : (
+                          alerts.slice(0, 4).map((alert) => {
+                            let badgeBg = "bg-red-50 text-red-755 border-red-200"
+                            if (alert.severity === "medium" || alert.severity === "warning") {
+                              badgeBg = "bg-orange-50 text-orange-755 border-orange-200"
+                            } else if (alert.severity === "low" || alert.severity === "info") {
+                              badgeBg = "bg-blue-50 text-blue-750 border-blue-200"
+                            }
 
-          <TabsContent value="ai-anomaly" className="space-y-6 fade-in">
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">AI Anomaly Detection</h2>
-                <p className="text-gray-600">
-                  Advanced AI system monitoring for unusual patterns and potential safety threats
-                </p>
+                            const isAutomatic = alert.type === "geofence" || alert.type === "geofence_entry" || alert.type === "unusual_location" || alert.type === "zone_violation"
+
+                            return (
+                              <div key={alert.id} className="flex items-start justify-between border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                                <div className="space-y-0.5 pr-2 max-w-[70%]">
+                                  <div className="flex items-center space-x-1.5">
+                                    <h4 className="font-semibold text-xs text-gray-800 truncate uppercase">{alert.type} Alert</h4>
+                                    <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                                      isAutomatic ? "bg-purple-50 text-purple-600 border border-purple-100" : "bg-blue-50 text-blue-600 border border-blue-100"
+                                    }`}>
+                                      {isAutomatic ? "alert send for me automaticaly when i reach the risk zone" : "i sent alert"}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-gray-450 block truncate">{alert.message}</span>
+                                </div>
+                                <Badge className={`px-2 py-0.5 text-[9px] font-bold border rounded-full capitalize shrink-0 ${badgeBg}`}>
+                                  {alert.severity}
+                                </Badge>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Live Tracking Users Panel */}
+                  <Card className="bg-white border-gray-200/80 shadow-sm">
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm font-bold text-gray-800">Live Tracking</CardTitle>
+                        <CardDescription className="text-xs text-gray-400">Family members & travel companion status</CardDescription>
+                      </div>
+                      <button onClick={() => setActiveTab("tracking")} className="text-xs text-blue-600 font-semibold hover:underline">
+                        View All
+                      </button>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <div className="space-y-3.5">
+                        {liveTrackUsers.map((person, idx) => (
+                          <div key={idx} className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2.5">
+                              <div className="h-8 w-8 bg-blue-100 text-blue-600 font-bold text-[10px] rounded-full flex items-center justify-center">
+                                {person.avatar}
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-xs text-gray-800">{person.name}</h4>
+                                <span className="text-[10px] text-gray-450 block">{person.location}</span>
+                              </div>
+                            </div>
+                            {person.status === "Live" ? (
+                              <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15 border border-emerald-500/20 text-[9px] font-bold">
+                                Live
+                              </Badge>
+                            ) : (
+                              <span className="text-[10px] text-gray-400 font-medium">{person.status}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                </div>
+
+              </div>
+
+              {/* BOTTOM COLUMN: Charts & System Status */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6">
+                
+                {/* 1. Safety Overview line chart (4 columns) */}
+                <Card className="lg:col-span-4 bg-white border-gray-200/80 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-bold text-gray-800">Safety Overview</CardTitle>
+                    <CardDescription className="text-xs text-gray-400">Weekly alert incidence tracker</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-3 pt-0">
+                    {/* SVG Line Chart */}
+                    <svg className="w-full h-44" viewBox="0 0 600 180">
+                      <line x1="40" y1="20" x2="560" y2="20" stroke="#f1f5f9" strokeWidth="1" />
+                      <line x1="40" y1="60" x2="560" y2="60" stroke="#f1f5f9" strokeWidth="1" />
+                      <line x1="40" y1="100" x2="560" y2="100" stroke="#f1f5f9" strokeWidth="1" />
+                      <line x1="40" y1="140" x2="560" y2="140" stroke="#f1f5f9" strokeWidth="1" />
+                      
+                      {/* Gradient Fill */}
+                      <path d="M40,140 C80,130 125,160 170,110 C215,60 260,115 305,95 C350,75 395,120 440,110 C485,100 520,40 560,50 L560,160 L40,160 Z" fill="url(#chart-gradient)" opacity="0.15" />
+                      
+                      {/* Trend Line */}
+                      <path d="M40,140 C80,130 125,160 170,110 C215,60 260,115 305,95 C350,75 395,120 440,110 C485,100 520,40 560,50" fill="none" stroke="#2563eb" strokeWidth="3.5" strokeLinecap="round" />
+                      
+                      {/* Active Node Circle */}
+                      <circle cx="215" cy="60" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="2.5" />
+                      
+                      <text x="40" y="175" fill="#94a3b8" fontSize="11" textAnchor="middle">Mon</text>
+                      <text x="126" y="175" fill="#94a3b8" fontSize="11" textAnchor="middle">Tue</text>
+                      <text x="212" y="175" fill="#94a3b8" fontSize="11" textAnchor="middle">Wed</text>
+                      <text x="298" y="175" fill="#94a3b8" fontSize="11" textAnchor="middle">Thu</text>
+                      <text x="384" y="175" fill="#94a3b8" fontSize="11" textAnchor="middle">Fri</text>
+                      <text x="470" y="175" fill="#94a3b8" fontSize="11" textAnchor="middle">Sat</text>
+                      <text x="560" y="175" fill="#94a3b8" fontSize="11" textAnchor="middle">Sun</text>
+                      
+                      <defs>
+                        <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#2563eb" />
+                          <stop offset="100%" stopColor="transparent" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                  </CardContent>
+                </Card>
+
+                {/* 2. Alerts by Type donut chart (3 columns) */}
+                <Card className="lg:col-span-3 bg-white border-gray-200/80 shadow-sm">
+                  <CardHeader className="pb-1">
+                    <CardTitle className="text-sm font-bold text-gray-800">Alerts by Type</CardTitle>
+                    <CardDescription className="text-xs text-gray-400">Distribution category breakdown</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-3 pt-0 flex flex-col items-center">
+                    {/* Donut Chart SVG */}
+                    <div className="relative w-36 h-36 flex items-center justify-center">
+                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#f8fafc" strokeWidth="4.5" />
+                        
+                        {/* Emergency: 38% */}
+                        <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#ef4444" strokeWidth="4.5" strokeDasharray="38 100" strokeDashoffset="0" />
+                        {/* Medical: 25% */}
+                        <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#f97316" strokeWidth="4.5" strokeDasharray="25 100" strokeDashoffset="-38" />
+                        {/* Security: 20% */}
+                        <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#eab308" strokeWidth="4.5" strokeDasharray="20 100" strokeDashoffset="-63" />
+                        {/* Weather: 10% */}
+                        <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#3b82f6" strokeWidth="4.5" strokeDasharray="10 100" strokeDashoffset="-83" />
+                        {/* Others: 7% */}
+                        <circle cx="18" cy="18" r="15.9155" fill="transparent" stroke="#94a3b8" strokeWidth="4.5" strokeDasharray="7 100" strokeDashoffset="-93" />
+                      </svg>
+                      <div className="absolute flex flex-col items-center">
+                        <span className="text-xl font-bold text-gray-800">145</span>
+                        <span className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Alerts</span>
+                      </div>
+                    </div>
+
+                    {/* Donut Legend */}
+                    <div className="grid grid-cols-3 gap-y-1.5 gap-x-2 text-[10px] font-medium text-gray-500 mt-2.5 w-full">
+                      <div className="flex items-center space-x-1"><span className="h-2 w-2 rounded-full bg-red-500"></span><span>Emerg (38%)</span></div>
+                      <div className="flex items-center space-x-1"><span className="h-2 w-2 rounded-full bg-orange-500"></span><span>Medic (25%)</span></div>
+                      <div className="flex items-center space-x-1"><span className="h-2 w-2 rounded-full bg-yellow-500"></span><span>Secur (20%)</span></div>
+                      <div className="flex items-center space-x-1"><span className="h-2 w-2 rounded-full bg-blue-500"></span><span>Weath (10%)</span></div>
+                      <div className="flex items-center space-x-1"><span className="h-2 w-2 rounded-full bg-gray-400"></span><span>Other (7%)</span></div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 3. System Health (2 columns) */}
+                <Card className="lg:col-span-2 bg-white border-gray-200/80 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-bold text-gray-800">System Health</CardTitle>
+                    <CardDescription className="text-xs text-gray-400">Services connectivity status</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0">
+                    <div className="space-y-3.5">
+                      {systemHealthItems.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-gray-600">{item.name}</span>
+                          <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5">
+                            {item.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 4. AI Assistant Card widget (3 columns) */}
+                <Card className="lg:col-span-3 bg-gradient-to-br from-indigo-900 to-blue-950 text-gray-150 border-0 shadow-lg shadow-indigo-950/20">
+                  <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle className="text-sm font-bold text-white flex items-center space-x-1.5">
+                        <span>AI Assistant</span>
+                        <span className="bg-blue-500 text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-full text-white font-black">New</span>
+                      </CardTitle>
+                      <CardDescription className="text-[11px] text-indigo-200">Hi! I'm your AI safety assistant.</CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-3 pt-0 space-y-3.5">
+                    {/* Quick response pills */}
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        "Safety tips for this area",
+                        "Weather update",
+                        "Nearby hospitals",
+                        "Emergency contacts"
+                      ].map((pillText, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setAiInputValue(pillText)
+                          }}
+                          className="bg-white/10 hover:bg-white/15 border border-white/10 text-[9px] text-white/90 rounded-full px-2 py-1 transition-colors text-left"
+                        >
+                          {pillText}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Simple Message History Log */}
+                    <div className="h-16 overflow-y-auto pr-1 text-[11px] space-y-1.5 scrollbar-thin">
+                      {aiMessages.map((msg, i) => (
+                        <div key={i} className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}>
+                          <div className={`rounded-lg p-2 max-w-[85%] leading-normal ${
+                            msg.sender === "user" ? "bg-blue-600 text-white" : "bg-white/10 text-indigo-100"
+                          }`}>
+                            {msg.text}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Chat Text Form */}
+                    <form onSubmit={handleSendAiMessage} className="flex items-center space-x-1.5 bg-white/10 rounded-full p-1 border border-white/15">
+                      <input
+                        type="text"
+                        placeholder="Ask me anything..."
+                        value={aiInputValue}
+                        onChange={(e) => setAiInputValue(e.target.value)}
+                        className="bg-transparent text-xs text-white placeholder-indigo-300/60 focus:outline-none flex-1 px-3 py-1"
+                      />
+                      <button type="submit" className="h-6 w-6 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center text-white shrink-0">
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </form>
+                  </CardContent>
+                </Card>
+
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 2: ALERTS TAB */}
+          {activeTab === "alerts" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              
+              {/* Header Stats Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center space-x-3 shadow-sm">
+                  <div className="p-2.5 bg-blue-50 rounded-lg">
+                    <Bell className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Alerts</p>
+                    <h3 className="text-2xl font-bold text-gray-800">{sentAlerts.length + receivedAlerts.length}</h3>
+                  </div>
+                </div>
+                <div className="bg-white border border-blue-100 rounded-xl p-4 flex items-center space-x-3 shadow-sm">
+                  <div className="p-2.5 bg-blue-50 rounded-lg">
+                    <User className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Sent by Me</p>
+                    <h3 className="text-2xl font-bold text-blue-600">{sentAlerts.length}</h3>
+                  </div>
+                </div>
+                <div className="bg-white border border-purple-100 rounded-xl p-4 flex items-center space-x-3 shadow-sm">
+                  <div className="p-2.5 bg-purple-50 rounded-lg">
+                    <AlertCircle className="h-5 w-5 text-purple-500" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Auto Received</p>
+                    <h3 className="text-2xl font-bold text-purple-600">{receivedAlerts.length}</h3>
+                  </div>
+                </div>
+              </div>
+
+              {/* Two Column Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                {/* LEFT: Sent Alerts (Manual) */}
+                <Card className="bg-white border-blue-100 shadow-sm">
+                  <CardHeader className="pb-3 border-b border-blue-50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="p-1.5 bg-blue-100 rounded-lg">
+                          <User className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-sm font-bold text-gray-800">Alerts I Sent</CardTitle>
+                          <CardDescription className="text-[11px] text-gray-400">Manually triggered by you</CardDescription>
+                        </div>
+                      </div>
+                      <Badge className="bg-blue-50 text-blue-700 border border-blue-200 font-bold text-[10px]">
+                        {sentAlerts.length} total
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    {sentAlerts.length === 0 ? (
+                      <div className="text-center py-10 space-y-2">
+                        <div className="h-10 w-10 bg-gray-50 rounded-full flex items-center justify-center mx-auto">
+                          <CheckCircle className="h-5 w-5 text-gray-300" />
+                        </div>
+                        <p className="text-xs text-gray-400">No manual alerts sent yet.</p>
+                        <p className="text-[10px] text-gray-300">Use the Quick Actions to send an alert.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                        {sentAlerts.map((alert) => {
+                          const sColor = alert.severity === "critical" ? "border-red-200 bg-red-50/30"
+                            : alert.severity === "high" ? "border-orange-200 bg-orange-50/20"
+                            : "border-gray-100 bg-gray-50/20"
+                          const severityBadge = alert.severity === "critical" ? "bg-red-100 text-red-700"
+                            : alert.severity === "high" ? "bg-orange-100 text-orange-700"
+                            : "bg-gray-100 text-gray-600"
+                          const typeIcon = alert.type === "medical" ? "🩺"
+                            : alert.type === "security" ? "🛡️"
+                            : alert.type === "assistance" ? "🤝"
+                            : "🚨"
+                          return (
+                            <div key={alert.id} className={`border rounded-xl p-3.5 ${sColor} transition-colors`}>
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-base">{typeIcon}</span>
+                                  <div>
+                                    <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wide">{alert.type} Alert</h4>
+                                    <span className="text-[10px] text-gray-400">{new Date(alert.created_at).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${severityBadge}`}>
+                                  {alert.severity}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-gray-600 leading-relaxed">{alert.message}</p>
+                              {alert.location_lat && alert.location_lng && (
+                                <div className="flex items-center space-x-1 mt-2">
+                                  <MapPin className="h-3 w-3 text-gray-400" />
+                                  <span className="text-[10px] text-gray-400 font-mono">{Number(alert.location_lat).toFixed(4)}, {Number(alert.location_lng).toFixed(4)}</span>
+                                </div>
+                              )}
+                              <div className="mt-2 flex items-center space-x-1.5">
+                                <div className={`h-1.5 w-1.5 rounded-full ${alert.status === "active" ? "bg-orange-400 animate-pulse" : "bg-emerald-400"}`} />
+                                <span className={`text-[9px] font-semibold uppercase ${alert.status === "active" ? "text-orange-500" : "text-emerald-500"}`}>{alert.status}</span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* RIGHT: Received Alerts (Automatic / Geofence) */}
+                <Card className="bg-white border-purple-100 shadow-sm">
+                  <CardHeader className="pb-3 border-b border-purple-50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="p-1.5 bg-purple-100 rounded-lg">
+                          <AlertCircle className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-sm font-bold text-gray-800">Auto Alerts Received</CardTitle>
+                          <CardDescription className="text-[11px] text-gray-400">Sent automatically when you enter a risk zone</CardDescription>
+                        </div>
+                      </div>
+                      <Badge className="bg-purple-50 text-purple-700 border border-purple-200 font-bold text-[10px]">
+                        {receivedAlerts.length} total
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-4">
+                    {receivedAlerts.length === 0 ? (
+                      <div className="text-center py-10 space-y-2">
+                        <div className="h-10 w-10 bg-emerald-50 rounded-full flex items-center justify-center mx-auto">
+                          <Shield className="h-5 w-5 text-emerald-400" />
+                        </div>
+                        <p className="text-xs text-gray-400">No geofence alerts yet.</p>
+                        <p className="text-[10px] text-gray-300">You'll be alerted automatically when entering a risk area.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                        {receivedAlerts.map((alert) => {
+                          const sColor = alert.severity === "critical" ? "border-red-200 bg-red-50/30"
+                            : alert.severity === "high" ? "border-purple-200 bg-purple-50/20"
+                            : "border-gray-100 bg-gray-50/20"
+                          const severityBadge = alert.severity === "critical" ? "bg-red-100 text-red-700"
+                            : alert.severity === "high" ? "bg-purple-100 text-purple-700"
+                            : "bg-gray-100 text-gray-600"
+                          const zoneIcon = alert.type === "geofence_entry" ? "🔴" : alert.type === "geofence_exit" ? "🟢" : "⚠️"
+                          return (
+                            <div key={alert.id} className={`border rounded-xl p-3.5 ${sColor} transition-colors`}>
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-base">{zoneIcon}</span>
+                                  <div>
+                                    <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wide">
+                                      {alert.type?.replace(/_/g, " ")} Alert
+                                    </h4>
+                                    <span className="text-[10px] text-gray-400">{new Date(alert.created_at).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${severityBadge}`}>
+                                  {alert.severity}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-gray-600 leading-relaxed">{alert.message}</p>
+                              {alert.location_lat && alert.location_lng && (
+                                <div className="flex items-center space-x-1 mt-2">
+                                  <MapPin className="h-3 w-3 text-gray-400" />
+                                  <span className="text-[10px] text-gray-400 font-mono">{Number(alert.location_lat).toFixed(4)}, {Number(alert.location_lng).toFixed(4)}</span>
+                                </div>
+                              )}
+                              <div className="mt-2 flex items-center space-x-1.5">
+                                <Navigation className="h-3 w-3 text-purple-400" />
+                                <span className="text-[9px] font-semibold text-purple-500 uppercase">Auto-generated by system</span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+              </div>
+            </div>
+          )}
+
+
+          {/* TAB 3: DIGITAL ID */}
+          {activeTab === "digital-id" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="text-center max-w-xl mx-auto mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">Digital Tourist ID</h2>
+                <p className="text-xs text-gray-500">Your verified travel credentials secured on the local register blockchain.</p>
+              </div>
+              <DigitalIDDisplay />
+              <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-base font-bold text-gray-800 mb-4">Generate Digital ID</h3>
+                <DigitalIDGenerator />
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: LIVE TRACKING */}
+          {activeTab === "tracking" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="text-center max-w-xl mx-auto mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">GPS Tracking & Safe Zones</h2>
+                <p className="text-xs text-gray-500">View safe perimeters, hospitals, police stations, and tracked travel companions.</p>
+              </div>
+              <LiveTrackingMap currentLocation={currentLocation} />
+            </div>
+          )}
+
+          {/* TAB 5: EMERGENCY SYSTEM */}
+          {activeTab === "emergency" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="text-center max-w-xl mx-auto mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">Advanced SOS Panel</h2>
+                <p className="text-xs text-gray-500">Trigger immediate panic signals, record emergency voice memos, or sync offline alerts.</p>
+              </div>
+              <EnhancedEmergencySystem />
+            </div>
+          )}
+
+          {/* TAB 6: SAFETY ADVICE */}
+          {activeTab === "safety" && (
+            <div className="grid gap-6 lg:grid-cols-2 animate-in fade-in duration-200">
+              
+              <Card className="bg-white border-gray-200/80 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-gray-800 text-sm font-bold uppercase tracking-wide">Essential Safety Guidelines</CardTitle>
+                  <CardDescription className="text-xs text-gray-400">Keep these rules in mind during your travel</CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 pt-0">
+                  <div className="space-y-3">
+                    {safetyTips.map((tip, index) => (
+                      <div key={index} className="flex items-start space-x-3 p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
+                        <CheckCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                        <p className="text-xs text-blue-800 leading-normal">{tip}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white border-gray-200/80 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-gray-800 text-sm font-bold uppercase tracking-wide">Emergency Actions Action-List</CardTitle>
+                  <CardDescription className="text-xs text-gray-400">Immediate steps to take during safety incidents</CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 pt-0">
+                  <div className="space-y-4">
+                    <div className="p-4 border border-gray-100 rounded-xl bg-gray-50/30">
+                      <h4 className="font-semibold text-xs mb-2 text-gray-850">Local Speed Dial Directory</h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                        <p>Police Station: 100</p>
+                        <p>Ambulance Service: 102</p>
+                        <p>Fire Rescue: 101</p>
+                        <p>Tourist Help Desk: 1800-425-4747</p>
+                      </div>
+                    </div>
+                    <div className="p-4 border border-gray-100 rounded-xl bg-gray-50/30">
+                      <h4 className="font-semibold text-xs mb-2 text-gray-850">Emergency Procedures</h4>
+                      <ol className="space-y-2 text-xs text-gray-650 list-decimal list-inside leading-normal">
+                        <li>Press the main SOS button or dial emergency contacts.</li>
+                        <li>Find a secure, public lit environment and stay there.</li>
+                        <li>Keep your device battery active; do not run streaming apps.</li>
+                        <li>Broadcast your location coordinate updates continuously.</li>
+                      </ol>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+            </div>
+          )}
+
+          {/* TAB 7: AI ASSISTANT DETAILED PANEL */}
+          {activeTab === "ai-assistant" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="text-center max-w-xl mx-auto mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">AI Safety Assistant</h2>
+                <p className="text-xs text-gray-500">Ask safety questions, check crime indexes, or query regional travel guidelines.</p>
+              </div>
+              <AISafetyAssistant />
+            </div>
+          )}
+
+          {/* TAB 8: GEMINI AI ADVISOR */}
+          {activeTab === "gemini-ai" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <AISafetyAdvisor />
+            </div>
+          )}
+
+          {/* TAB 9: REPORTS (AI ANOMALY DETECTOR) */}
+          {activeTab === "ai-anomaly" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="text-center max-w-xl mx-auto mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">AI Anomaly Analysis</h2>
+                <p className="text-xs text-gray-500">Automatic route deviations and connection failure report log.</p>
               </div>
               <AIAnomalyDetector />
             </div>
-          </TabsContent>
-        </Tabs>
-      </div>
+          )}
 
+          {/* TAB 10: SETTINGS / PROFILE DETAILS */}
+          {activeTab === "profile" && (
+            <Card className="bg-white border-gray-200 max-w-3xl mx-auto shadow-sm animate-in fade-in duration-200">
+              <CardHeader>
+                <CardTitle className="text-gray-800">Account Profile & Settings</CardTitle>
+                <CardDescription>Manage verified tourist registration records</CardDescription>
+              </CardHeader>
+              <CardContent className="p-6">
+                <form onSubmit={handleSaveProfile} className="space-y-6">
+                  {saveSuccess && (
+                    <Alert className="bg-emerald-50 border-emerald-200 text-emerald-800">
+                      <CheckCircle className="h-4 w-4 text-emerald-600 mr-2 shrink-0" />
+                      <AlertDescription>Profile updated successfully!</AlertDescription>
+                    </Alert>
+                  )}
+                  {profileError && (
+                    <Alert className="bg-red-50 border-red-200 text-red-800">
+                      <AlertCircle className="h-4 w-4 text-red-650 mr-2 shrink-0" />
+                      <AlertDescription>{profileError}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex items-center space-x-4 pb-4 border-b border-gray-100">
+                    <div className="h-16 w-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center font-bold text-blue-600 text-lg">
+                      {profileName ? profileName.substring(0, 2).toUpperCase() : (user?.email ? user.email.substring(0, 2).toUpperCase() : "JE")}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">{profileName || user?.email?.split('@')[0] || "Tourist"}</h3>
+                      <p className="text-xs text-gray-500">{user?.email}</p>
+                      <Badge className="mt-1 bg-emerald-500 text-white text-[9px] font-bold">Verified Tourist</Badge>
+                    </div>
+                  </div>
+
+                  {/* Personal Info */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wide">Personal Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-500">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={profileName}
+                          onChange={(e) => setProfileName(e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-500">Phone Number</label>
+                        <input
+                          type="text"
+                          value={profilePhone}
+                          onChange={(e) => setProfilePhone(e.target.value)}
+                          placeholder="+1 (555) 000-0000"
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Emergency Contacts */}
+                  <div className="space-y-4 pt-2">
+                    <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wide">Emergency Contacts</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-500">Contact Name</label>
+                        <input
+                          type="text"
+                          value={emergencyContact}
+                          onChange={(e) => setEmergencyContact(e.target.value)}
+                          placeholder="Spouse, parent, or trusted contact"
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-500">Contact Phone</label>
+                        <input
+                          type="text"
+                          value={emergencyPhone}
+                          onChange={(e) => setEmergencyPhone(e.target.value)}
+                          placeholder="Emergency phone number"
+                          className="w-full text-xs border border-gray-200 rounded-lg p-2.5 bg-gray-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-gray-600">
+                    <div className="space-y-3">
+                      <div>
+                        <span className="font-semibold block mb-1">Registered Blockchain ID</span>
+                        <code className="bg-gray-100 p-2 rounded block font-mono text-[10px] text-gray-800 truncate">{profile?.blockchain_id || user?.blockchainId || "BLK-MOCK-7A4B9"}</code>
+                      </div>
+                      <div>
+                        <span className="font-semibold block mb-1">Creation Timestamp</span>
+                        <span className="bg-gray-50 p-2 rounded block text-gray-800">
+                          {profile?.created_at ? new Date(profile.created_at).toLocaleString() : user?.createdAt ? new Date(user.createdAt).toLocaleString() : new Date().toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <span className="font-semibold block mb-1">Status Verification</span>
+                        <span className="bg-emerald-50 text-emerald-800 p-2 rounded block border border-emerald-100 font-medium flex items-center space-x-1.5">
+                          <CheckCircle className="h-4.5 w-4.5 text-emerald-600" />
+                          <span>Active / Safe Profile</span>
+                        </span>
+                      </div>
+                      <div>
+                        <span className="font-semibold block mb-1">User Account Role</span>
+                        <span className="bg-gray-50 p-2 rounded block text-gray-800 uppercase tracking-wider font-semibold">{user?.role || "tourist"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
+                      className="text-red-650 hover:text-red-750 hover:bg-red-50 border-red-200 transition-colors text-xs"
+                    >
+                      {isLoggingOut ? <LoadingSpinner size="sm" /> : <LogOut className="h-4 w-4 mr-2" />}
+                      Logout Account
+                    </Button>
+
+                    <Button
+                      type="submit"
+                      disabled={isSavingProfile}
+                      className="bg-blue-650 hover:bg-blue-750 text-white font-semibold py-2 px-4 rounded-lg text-xs transition-colors shadow-sm"
+                    >
+                      {isSavingProfile ? <LoadingSpinner size="sm" /> : "Save Changes"}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+        </div>
+
+      </main>
+
+      {/* Floating AI Chat Assistant Component */}
       <AIChatAssistant
         touristName={user?.name}
         location={currentLocation ? `${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : undefined}
       />
+
     </div>
   )
 }

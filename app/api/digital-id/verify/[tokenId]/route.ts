@@ -1,19 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/db-client/server"
 import { blockchainClient } from "@/lib/blockchain/client"
 
 export async function GET(request: NextRequest, props: { params: Promise<{ tokenId: string }> }) {
   try {
     const params = await props.params;
-    const cookieStore = await cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const dbClient = await createServerClient()
+
 
     const { tokenId } = params
 
@@ -37,7 +30,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ token
     }
 
     // Get additional details from database
-    const { data: digitalId } = await supabase
+    const { data: digitalId } = await dbClient
       .from("digital_tourist_ids")
       .select(`
         *,

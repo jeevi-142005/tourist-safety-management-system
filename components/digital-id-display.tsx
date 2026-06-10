@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Shield, QrCode, RefreshCw, AlertCircle, CheckCircle, Calendar, FileText } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/db-client/client"
 
 interface TouristID {
   id: string
@@ -40,17 +40,17 @@ export function DigitalIDDisplay() {
 
   const fetchTouristID = async () => {
     try {
-      const supabase = createClient()
+      const dbClient = createClient()
 
       const {
         data: { user },
         error: userError,
-      } = await supabase.auth.getUser()
+      } = await dbClient.auth.getUser()
       if (userError || !user) {
         throw new Error("User not authenticated")
       }
 
-      const { data, error: fetchError } = await supabase
+      const { data, error: fetchError } = await Database
         .from("tourist_ids")
         .select("*")
         .eq("user_id", user.id)
