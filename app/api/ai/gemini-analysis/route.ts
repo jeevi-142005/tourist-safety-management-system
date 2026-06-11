@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
         .limit(20),
     ])
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
     const comprehensivePrompt = `
     You are an advanced AI safety analyst. Perform a comprehensive safety analysis for a tourist based on the following data:

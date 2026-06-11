@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Brain, AlertTriangle, TrendingUp, Activity, Shield, Eye, Wifi, Battery, MapPin, Zap } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useAlerts } from "@/hooks/use-alerts"
-import { createClient } from "@/lib/db-client/client"
+import { analyzeAndStoreAnomalies, getUserAnomalies, resolveUserAnomaly } from "@/app/actions/anomaly"
 
 interface AnomalyPattern {
   id: string
@@ -63,6 +63,14 @@ export function AIAnomalyDetector() {
   const uptimeStartRef = useRef<Date>(new Date())
 
   useEffect(() => {
+    if (user?.id) {
+      getUserAnomalies(user.id).then((fetchedAnomalies) => {
+        setAnomalies(fetchedAnomalies)
+      }).catch(console.error)
+    }
+  }, [user])
+
+  useEffect(() => {
     if (isActive) {
       startAnomalyDetection()
     } else {
@@ -86,7 +94,7 @@ export function AIAnomalyDetector() {
   }, [isActive])
 
   const startAnomalyDetection = () => {
-    analysisIntervalRef.current = setInterval(performAnomalyAnalysis, 30000) // Every 30 seconds
+    analysisIntervalRef.current = setInterval(performAnomalyAnalysis, 60000) // Every 60 seconds
     deviceMonitorRef.current = setInterval(updateDeviceMetrics, 5000) // Every 5 seconds
 
     uptimeStartRef.current = new Date()
@@ -233,51 +241,8 @@ export function AIAnomalyDetector() {
         }
       })
 
-      // For demo purposes, create realistic anomaly patterns
-      const mockAnomalies: AnomalyPattern[] = []
-      
-      // Check for real anomalies based on device metrics
-      if (deviceMetrics.battery_level < 20) {
-        mockAnomalies.push({
-          id: `battery-${Date.now()}`,
-          type: "device",
-          severity: "medium",
-          confidence: 0.85,
-          description: "Critical battery level detected - device may shut down unexpectedly",
-          detected_at: new Date().toISOString(),
-          resolved: false,
-          risk_factors: ["Low battery", "Potential communication loss"],
-          recommendations: ["Find charging station immediately", "Enable power saving mode", "Inform emergency contacts of location"]
-        })
-      }
-
-      if (deviceMetrics.location_accuracy < 30) {
-        mockAnomalies.push({
-          id: `location-${Date.now()}`,
-          type: "location",
-          severity: "high",
-          confidence: 0.92,
-          description: "Poor GPS accuracy detected - location tracking compromised",
-          detected_at: new Date().toISOString(),
-          resolved: false,
-          risk_factors: ["GPS signal weak", "Indoor location", "Weather interference"],
-          recommendations: ["Move to open area", "Check GPS settings", "Use alternative navigation"]
-        })
-      }
-
-      if (deviceMetrics.movement_pattern === "irregular") {
-        mockAnomalies.push({
-          id: `movement-${Date.now()}`,
-          type: "behavioral",
-          severity: "high",
-          confidence: 0.78,
-          description: "Irregular movement pattern detected - possible distress or emergency",
-          detected_at: new Date().toISOString(),
-          resolved: false,
-          risk_factors: ["Erratic movement", "Possible emergency", "Unusual behavior"],
-          recommendations: ["Check if assistance needed", "Contact emergency services if required", "Verify safety status"]
-        })
-      }
+      // Fetch anomalies from Gemini and DB
+      const newAnomalies = await analyzeAndStoreAnomalies(deviceMetrics, currentLocation, user.id)
 
       const responseTime = Date.now() - analysisStart
       setMonitoringStats((prev) => ({
@@ -286,10 +251,10 @@ export function AIAnomalyDetector() {
         avgResponseTime: Math.round((prev.avgResponseTime + responseTime) / 2),
       }))
 
-      if (mockAnomalies.length > 0) {
-        setAnomalies((prev) => [...mockAnomalies, ...prev].slice(0, 10))
+      if (newAnomalies && newAnomalies.length > 0) {
+        setAnomalies((prev) => [...newAnomalies, ...prev].slice(0, 10))
 
-        const highestSeverity = mockAnomalies.reduce((max: string, anomaly: AnomalyPattern) => {
+        const highestSeverity = newAnomalies.reduce((max: string, anomaly: AnomalyPattern) => {
           const severityOrder = { low: 1, medium: 2, high: 3, critical: 4 }
           return severityOrder[anomaly.severity as keyof typeof severityOrder] >
             severityOrder[max as keyof typeof severityOrder]
@@ -299,7 +264,7 @@ export function AIAnomalyDetector() {
 
         setThreatLevel(highestSeverity as any)
 
-        const criticalThreats = mockAnomalies.filter(
+        const criticalThreats = newAnomalies.filter(
           (a: AnomalyPattern) => a.severity === "critical" || a.severity === "high",
         )
         if (criticalThreats.length > 0) {
@@ -307,7 +272,7 @@ export function AIAnomalyDetector() {
         }
 
         // Create alerts for critical anomalies
-        const criticalAnomalies = mockAnomalies.filter((a: AnomalyPattern) => a.severity === "critical")
+        const criticalAnomalies = newAnomalies.filter((a: AnomalyPattern) => a.severity === "critical")
         for (const anomaly of criticalAnomalies) {
           await createAlert({
             touristId: user.id,
@@ -330,10 +295,7 @@ export function AIAnomalyDetector() {
 
   const resolveAnomaly = async (anomalyId: string) => {
     try {
-      const dbClient = createClient()
-      if (Database) {
-        await dbClient.from("anomaly_patterns").update({ resolved: true }).eq("id", anomalyId)
-      }
+      await resolveUserAnomaly(anomalyId)
       setAnomalies((prev) => prev.map((a) => (a.id === anomalyId ? { ...a, resolved: true } : a)))
     } catch (error) {
       console.error("Error resolving anomaly:", error)

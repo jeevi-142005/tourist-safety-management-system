@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { EditProfileModal } from "@/components/edit-profile-modal"
+import { TouristDetailsModal } from "@/components/tourist-details-modal"
+import { AlertResolutionModal } from "@/components/alert-resolution-modal"
 import {
   Shield,
   Users,
@@ -15,1115 +16,574 @@ import {
   LogOut,
   CheckCircle,
   Brain,
-  Zap,
-  TrendingUp,
+  FileText,
+  HeartPulse,
   Activity,
-  WifiOff,
-  Satellite,
+  Settings,
+  Building,
+  Radio,
+  Send,
+  CloudLightning,
   Bell,
 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { useAlerts } from "@/hooks/use-alerts"
-import { useLanguage } from "@/contexts/language-context"
-import { AIAlertAnalysis } from "./ai-alert-analysis"
-import { AIIncidentReport } from "./ai-incident-report"
-import { useAIAutomation } from "@/hooks/use-ai-automation"
-import { NotificationSystem } from "./notification-system"
-import { AIChatAssistant } from "./ai-chat-assistant"
 import { AuthorityHeatmap } from "./authority-heatmap"
 import { createClient } from "@/lib/db-client/client"
 
-interface Alert {
-  id: string
-  type: string
-  message: string
-  touristName: string
-  status: string
-  timestamp: string
-  location: {
-    lat: number
-    lng: number
-  }
-  severity: string
-  source?: 'online' | 'offline' | 'mesh'
-  user_name?: string
-  location_accuracy?: number
-  received_at?: string
-}
-
-interface Tourist {
-  id: string
-  name: string
-  email: string
-  blockchain_id?: string
-  entry_date: string
-  location_lat?: number
-  location_lng?: number
-  status: string
-  last_seen: string
-  nationality: string
-  visa_type: string
-}
-
-interface Activity {
-  type: 'emergency' | 'warning' | 'info'
-  message: string
-  status: string
-  time: string
-}
-
 export function AdminDashboard() {
   const { user, signOut } = useAuth()
-  const { t, language, setLanguage } = useLanguage()
-  const { alerts, activeAlerts, resolvedAlerts, loading, resolveAlert } = useAlerts()
+  const [activeTab, setActiveTab] = useState("police-control")
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false)
+  const [showProfileModal, setShowProfileModal] = useState(false)
+
+  // New Modals State
+  const [selectedTourist, setSelectedTourist] = useState<any | null>(null)
+  const [selectedAlert, setSelectedAlert] = useState<any | null>(null)
   
-  const [dashboardStats, setDashboardStats] = useState({
-    activeTourists: 0,
-    safeZones: 8,
-    avgResponseTime: "1.8m",
-    aiEfficiency: "98.7%"
-  })
-  const [recentActivity, setRecentActivity] = useState<Activity[]>([])
-  const [isLoadingStats, setIsLoadingStats] = useState(true)
-  const [tourists, setTourists] = useState<Tourist[]>([])
-  const [databaseAlerts, setDatabaseAlerts] = useState<Alert[]>([])
-  const [isPolling, setIsPolling] = useState(false)
-  const [offlineAlertQueue, setOfflineAlertQueue] = useState<Alert[]>([])
-  const [pendingOfflineAlerts, setPendingOfflineAlerts] = useState(0)
+  // Broadcast State
+  const [broadcastMessage, setBroadcastMessage] = useState("")
+  const [broadcastType, setBroadcastType] = useState("warning")
+  const [isBroadcasting, setIsBroadcasting] = useState(false)
 
-  // New offline alert states
-  const [meshAlerts, setMeshAlerts] = useState<Alert[]>([])
-  const [offlineAlertsReceived, setOfflineAlertsReceived] = useState(0)
+  // Real-time Data States
+  const [emergencyAlerts, setEmergencyAlerts] = useState<any[]>([])
+  const [medicalAlerts, setMedicalAlerts] = useState<any[]>([])
+  const [touristProfiles, setTouristProfiles] = useState<any[]>([])
+  const [anomalies, setAnomalies] = useState<any[]>([])
 
-  const [activeTab, setActiveTab] = useState("overview")
-  const [prioritizedAlerts, setPrioritizedAlerts] = useState<Alert[]>([])
-  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null)
-  const { prioritizeAlerts, isAnalyzing } = useAIAutomation()
+  // Data Fetching Function using dbClient
+  const fetchData = async () => {
+    const dbClient = createClient()
+    if (!dbClient) return
 
-  const [selectedTourist, setSelectedTourist] = useState<Tourist | null>(null)
-  const [showTouristDetails, setShowTouristDetails] = useState(false)
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
-
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  // Add this state for tourist data with offline alerts
-const [touristData, setTouristData] = useState([])
-
-// Add this useEffect to load tourist data
-useEffect(() => {
-  const loadTouristData = () => {
     try {
-      const data = JSON.parse(localStorage.getItem('adminTouristData') || '[]')
-      setTouristData(data)
-    } catch (error) {
-      console.error("Failed to load tourist data:", error)
-    }
-  }
-  
-  loadTouristData()
-  // Refresh every 3 seconds
-  const interval = setInterval(loadTouristData, 3000)
-  return () => clearInterval(interval)
-}, [])
-
-
-  // New offline alert functionality
-  useEffect(() => {
-    // Set up mesh network listener for offline alerts
-    const emergencyChannel = new BroadcastChannel('emergency-mesh')
-    
-    emergencyChannel.onmessage = (event) => {
-      if (event.data.type === 'EMERGENCY_ALERT') {
-        const alertData = {
-          ...event.data.data,
-          id: `mesh-${Date.now()}`,
-          source: 'mesh' as const,
-          received_at: new Date().toISOString(),
-          touristName: event.data.data.user_name || 'Unknown Tourist'
-        }
-        
-        setMeshAlerts(prev => [alertData, ...prev.slice(0, 49)])
-        setOfflineAlertsReceived(prev => prev + 1)
-        
-        // Show browser notification
-        if (Notification.permission === 'granted') {
-          new Notification('Emergency Alert Received (Offline)', {
-            body: `${alertData.type}: ${alertData.message}`,
-            icon: '/placeholder-logo.png',
-            tag: 'emergency-alert'
-          })
-        }
-        
-        playAlertSound()
+      // 1. Fetch Emergency Alerts (Live SOS)
+      const { data: alertsData } = await dbClient
+        .from('emergency_alerts')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (alertsData) {
+        setEmergencyAlerts(alertsData)
+        setMedicalAlerts(alertsData.filter((a: any) => a.type === 'medical'))
       }
-    }
 
-    // Set up service worker message listener
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data.type === 'EMERGENCY_ALERT_RECEIVED') {
-          const alertData = {
-            ...event.data.data,
-            id: `sw-${Date.now()}`,
-            source: 'offline' as const,
-            received_at: new Date().toISOString(),
-            touristName: event.data.data.user_name || 'Unknown Tourist'
-          }
-          
-          setMeshAlerts(prev => [alertData, ...prev.slice(0, 49)])
-          setOfflineAlertsReceived(prev => prev + 1)
-        }
-      })
-    }
+      // 2. Fetch Tourist Profiles
+      const { data: touristsData } = await dbClient
+        .from('tourist_profiles')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (touristsData) {
+        setTouristProfiles(touristsData)
+      }
 
-    // Request notification permission
-    if (Notification.permission === 'default') {
-      Notification.requestPermission()
+      // 3. Fetch AI Anomalies
+      const { data: anomaliesData } = await dbClient
+        .from('anomaly_patterns')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (anomaliesData) {
+        setAnomalies(anomaliesData)
+      }
+    } catch (err) {
+      console.error("Error fetching admin data:", err)
     }
+  }
 
-    return () => {
-      emergencyChannel.close()
-    }
+  // Poll for real-time updates every 5 seconds
+  useEffect(() => {
+    fetchData()
+    const interval = setInterval(fetchData, 5000)
+    return () => clearInterval(interval)
   }, [])
 
-  const playAlertSound = () => {
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-      const oscillator = audioContext.createOscillator()
-      const gainNode = audioContext.createGain()
-
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
-
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime)
-      oscillator.type = "sine"
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
-
-      oscillator.start(audioContext.currentTime)
-      oscillator.stop(audioContext.currentTime + 0.5)
-    } catch (error) {
-      console.log("Audio notification not supported")
-    }
-  }
-
-  const getAlertSourceIcon = (source?: string) => {
-    switch (source) {
-      case 'mesh':
-        return <Satellite className="h-4 w-4 text-green-500" />
-      case 'offline':
-        return <WifiOff className="h-4 w-4 text-orange-500" />
-      default:
-        return <Zap className="h-4 w-4 text-blue-500" />
-    }
-  }
-
-  const getAlertSourceBadge = (source?: string) => {
-    switch (source) {
-      case 'mesh':
-        return <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50">Mesh Network</Badge>
-      case 'offline':
-        return <Badge variant="outline" className="text-orange-700 border-orange-300 bg-orange-50">Offline Sync</Badge>
-      default:
-        return <Badge variant="outline" className="text-blue-700 border-blue-300 bg-blue-50">Online</Badge>
-    }
-  }
-
-  const simulateOfflineAlertReceived = useCallback((alert: Alert) => {
-    setOfflineAlertQueue(prev => [...prev, alert])
-    setPendingOfflineAlerts(prev => prev + 1)
-  }, [])
-
-  const processOfflineAlerts = useCallback(async () => {
-    if (offlineAlertQueue.length === 0) return
+  const handleBroadcast = async () => {
+    if (!broadcastMessage.trim()) return
+    setIsBroadcasting(true)
 
     try {
       const dbClient = createClient()
-      if (!Database) return
+      if (!dbClient) return
 
-      const { error } = await Database
-        .from('emergency_alerts')
-        .insert(offlineAlertQueue.map(alert => ({
-          user_id: alert.id,
-          type: alert.type,
-          message: alert.message,
-          severity: alert.severity,
-          location_lat: alert.location.lat,
-          location_lng: alert.location.lng,
+      // In a real app, you'd insert this for specific users based on location.
+      // Here we simulate a generic broadcast by inserting a system-wide user_alert.
+      // We loop over all active tourists
+      for (const tourist of touristProfiles.filter(t => t.is_active)) {
+        await dbClient.from('user_alerts').insert({
+          user_id: tourist.id,
+          user_name: tourist.name,
+          type: broadcastType,
+          severity: 'high',
+          message: `[AUTOMATED SAFETY BROADCAST]: ${broadcastMessage}`,
           status: 'active',
-          created_at: alert.timestamp
-        })))
-
-      if (error) throw error
-
-      setOfflineAlertQueue([])
-      setPendingOfflineAlerts(0)
-      await fetchDatabaseAlerts()
-      
-      console.log(`Processed ${offlineAlertQueue.length} offline alerts`)
-    } catch (error) {
-      console.error('Error processing offline alerts:', error)
-    }
-  }, [offlineAlertQueue])
-
-  const handleViewTouristDetails = (tourist: Tourist) => {
-    setSelectedTourist(tourist)
-    setShowTouristDetails(true)
-  }
-
-  const handleLogout = async () => {
-    try {
-      setIsLoggingOut(true)
-      await signOut()
-    } catch (error) {
-      console.error("Logout error:", error)
-    } finally {
-      setIsLoggingOut(false)
-    }
-  }
-
-  const fetchDatabaseAlerts = useCallback(async () => {
-    if (isPolling) return
-    
-    try {
-      setIsPolling(true)
-      const dbClient = createClient()
-      if (!Database) return
-
-      const { data: alertsData, error } = await Database
-        .from('emergency_alerts')
-        .select('*')
-        .neq('type', 'admin_notification')
-        .order('created_at', { ascending: false })
-      
-      if (error) {
-        console.error('Error fetching alerts:', error)
-        return
-      }
-
-      const formattedAlerts: Alert[] = alertsData?.map(alert => ({
-        id: alert.id,
-        type: alert.type || 'emergency',
-        message: alert.message || 'Emergency alert',
-        touristName: alert.user_name || 'Tourist User',
-        status: alert.status || 'active',
-        timestamp: alert.created_at,
-        location: {
-          lat: alert.location_lat || 40.7128,
-          lng: alert.location_lng || -74.006
-        },
-        severity: alert.severity || 'high',
-        source: 'online'
-      })) || []
-
-      setDatabaseAlerts(formattedAlerts)
-    } catch (error) {
-      console.error('Error in fetchDatabaseAlerts:', error)
-    } finally {
-      setIsPolling(false)
-    }
-  }, [isPolling])
-
-  const handleSendAlert = async (tourist: Tourist) => {
-    try {
-      const dbClient = createClient()
-      if (!Database) {
-        alert('Database not available')
-        return
-      }
-
-      const { error } = await dbClient.from('emergency_alerts').insert({
-        user_id: tourist.id,
-        type: 'admin_notification',
-        message: `Alert sent to ${tourist.name} by admin`,
-        severity: 'medium',
-        location_lat: tourist.location_lat,
-        location_lng: tourist.location_lng,
-        status: 'active',
-        created_at: new Date().toISOString()
-      })
-      
-      if (error) throw error
-      
-      await fetchRecentActivity()
-      alert(`Alert sent to ${tourist.name}`)
-    } catch (error) {
-      console.error('Error sending alert:', error)
-      alert('Failed to send alert')
-    }
-  }
-
-  const handleResolveRealAlert = async (alertId: string) => {
-    try {
-      // Handle mesh alerts differently
-      if (alertId.startsWith('mesh-') || alertId.startsWith('sw-')) {
-        setMeshAlerts(prev => prev.filter(alert => alert.id !== alertId))
-        return
-      }
-
-      const dbClient = createClient()
-      if (!Database) return
-
-      const { error } = await Database
-        .from('emergency_alerts')
-        .update({ 
-          status: 'resolved',
-          resolved_at: new Date().toISOString(),
-          resolved_by: user?.id
+          created_at: new Date().toISOString()
         })
-        .eq('id', alertId)
-      
-      if (error) throw error
-      
-      await fetchDatabaseAlerts()
-      await fetchRecentActivity()
-    } catch (error) {
-      console.error('Error resolving alert:', error)
+      }
+
+      setBroadcastMessage("")
+      alert(`Broadcast sent successfully to ${touristProfiles.filter(t => t.is_active).length} active tourists.`)
+    } catch (err) {
+      console.error("Broadcast failed", err)
+    } finally {
+      setIsBroadcasting(false)
     }
   }
-
-  const fetchDashboardStats = useCallback(async () => {
-    try {
-      setIsLoadingStats(true)
-      const dbClient = createClient()
-      
-      if (!Database) {
-        setDashboardStats({
-          activeTourists: 1247,
-          safeZones: 8,
-          avgResponseTime: "1.8m",
-          aiEfficiency: "98.7%"
-        })
-        return
-      }
-
-      const { count: touristCount } = await Database
-        .from('tourist_profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_active', true)
-      
-      const { data: resolvedAlertsData } = await Database
-        .from('emergency_alerts')
-        .select('created_at, resolved_at')
-        .eq('status', 'resolved')
-        .not('resolved_at', 'is', null)
-        .limit(50)
-      
-      let avgResponseTime = "1.8m"
-      if (resolvedAlertsData && resolvedAlertsData.length > 0) {
-        const totalTime = resolvedAlertsData.reduce((sum, alert) => {
-          const created = new Date(alert.created_at)
-          const resolved = new Date(alert.resolved_at)
-          return sum + (resolved.getTime() - created.getTime())
-        }, 0)
-        const avgMinutes = Math.round(totalTime / resolvedAlertsData.length / 60000)
-        avgResponseTime = `${avgMinutes}m`
-      }
-      
-      setDashboardStats({
-        activeTourists: touristCount || 0,
-        safeZones: 8,
-        avgResponseTime,
-        aiEfficiency: "98.7%"
-      })
-    } catch (error) {
-      console.error('Error fetching dashboard stats:', error)
-      setDashboardStats({
-        activeTourists: 1247,
-        safeZones: 8,
-        avgResponseTime: "1.8m",
-        aiEfficiency: "98.7%"
-      })
-    } finally {
-      setIsLoadingStats(false)
-    }
-  }, [])
-
-  const fetchRecentActivity = useCallback(async () => {
-    try {
-      const dbClient = createClient()
-      if (!Database) return
-      
-      const { data: recentAlerts } = await Database
-        .from('emergency_alerts')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10)
-      
-      if (recentAlerts) {
-        const activities: Activity[] = recentAlerts.map(alert => ({
-          type: alert.severity === 'high' ? 'emergency' : alert.severity === 'medium' ? 'warning' : 'info',
-          message: `${alert.type} alert: ${alert.message}`,
-          status: alert.status,
-          time: new Date(alert.created_at).toLocaleTimeString()
-        }))
-        setRecentActivity(activities)
-      }
-    } catch (error) {
-      console.error('Error fetching recent activity:', error)
-    }
-  }, [])
-
-  const fetchTourists = useCallback(async () => {
-    try {
-      const dbClient = createClient()
-      if (!Database) return
-
-      const { data: touristsData, error } = await Database
-        .from('tourist_profiles')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50)
-      
-      if (error) {
-        console.error('Error fetching tourists:', error)
-        return
-      }
-
-      const formattedTourists: Tourist[] = touristsData?.map(tourist => ({
-        id: tourist.id,
-        name: tourist.full_name || 'Unknown',
-        email: tourist.email || '',
-        blockchain_id: tourist.blockchain_id,
-        entry_date: tourist.created_at,
-        location_lat: tourist.location_lat,
-        location_lng: tourist.location_lng,
-        status: tourist.is_active ? 'active' : 'inactive',
-        last_seen: tourist.last_seen || 'Never',
-        nationality: tourist.nationality || 'Unknown',
-        visa_type: tourist.visa_type || 'Tourist'
-      })) || []
-
-      setTourists(formattedTourists)
-    } catch (error) {
-      console.error('Error in fetchTourists:', error)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchDashboardStats()
-    fetchDatabaseAlerts()
-    fetchRecentActivity()
-    fetchTourists()
-
-    intervalRef.current = setInterval(() => {
-      fetchDatabaseAlerts()
-      fetchRecentActivity()
-    }, 10000)
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [fetchDashboardStats, fetchDatabaseAlerts, fetchRecentActivity, fetchTourists])
-
-  useEffect(() => {
-    const runPrioritization = async () => {
-      if (activeAlerts.length > 0) {
-        const prioritized = await prioritizeAlerts(activeAlerts)
-        setPrioritizedAlerts(prioritized)
-      }
-    }
-    runPrioritization()
-  }, [activeAlerts, prioritizeAlerts])
-
-  // Combine database alerts and mesh alerts
-  const allActiveAlerts = [...databaseAlerts.filter(alert => alert.status === 'active'), ...meshAlerts].sort((a, b) => 
-    new Date(b.timestamp || b.received_at).getTime() - new Date(a.timestamp || a.received_at).getTime()
-  )
-
-  const allResolvedAlerts = databaseAlerts.filter(alert => alert.status === 'resolved')
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+    <div className="flex h-screen bg-[#f8fafc] text-gray-800 overflow-hidden font-sans selection:bg-blue-500/30">
+      
+      {/* LEFT SIDEBAR */}
+      <aside className="w-64 bg-[#0a0f1d] text-gray-400 border-r border-gray-800 flex flex-col justify-between shrink-0 z-20">
+        <div className="p-6">
+          <div className="flex items-center space-x-3 mb-10">
+            <div className="bg-blue-600/20 p-2 rounded-xl border border-blue-500/30">
+              <Shield className="h-6 w-6 text-blue-400" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white">SafeTour</h1>
+              <p className="text-[10px] uppercase tracking-widest text-blue-400 font-medium">Authority Portal</p>
+            </div>
+          </div>
+          
+          <nav className="space-y-1.5">
+            <div className="mb-4">
+              <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2 px-3">Dashboards</p>
+            </div>
+
+            <button
+              onClick={() => setActiveTab("police-control")}
+              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                activeTab === "police-control" 
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20 border-transparent" 
+                  : "text-gray-400 hover:bg-gray-800/60 hover:text-white border border-transparent"
+              }`}
+            >
+              <Shield className="h-4 w-4" />
+              <span className="text-sm font-medium">Police Control Room</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("tourism-dept")}
+              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                activeTab === "tourism-dept" 
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20 border-transparent" 
+                  : "text-gray-400 hover:bg-gray-800/60 hover:text-white border border-transparent"
+              }`}
+            >
+              <Building className="h-4 w-4" />
+              <span className="text-sm font-medium">Tourism Department</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("hospital")}
+              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                activeTab === "hospital" 
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20 border-transparent" 
+                  : "text-gray-400 hover:bg-gray-800/60 hover:text-white border border-transparent"
+              }`}
+            >
+              <HeartPulse className="h-4 w-4" />
+              <span className="text-sm font-medium">Hospital Dashboard</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("e-fir")}
+              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                activeTab === "e-fir" 
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20 border-transparent" 
+                  : "text-gray-400 hover:bg-gray-800/60 hover:text-white border border-transparent"
+              }`}
+            >
+              <FileText className="h-4 w-4" />
+              <span className="text-sm font-medium">E-FIR / Reports</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("broadcast")}
+              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 mt-4 ${
+                activeTab === "broadcast" 
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20 border-transparent" 
+                  : "text-gray-400 hover:bg-gray-800/60 hover:text-white border border-transparent"
+              }`}
+            >
+              <Radio className="h-4 w-4 text-red-400" />
+              <span className="text-sm font-medium text-red-400">Safety Broadcasts</span>
+            </button>
+          </nav>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50 relative">
+
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05] pointer-events-none mix-blend-overlay"></div>
+        <div className="absolute top-[-50%] left-[-10%] w-[70%] h-[70%] rounded-full bg-teal-400/20 blur-[120px] pointer-events-none"></div>
+        <div className="absolute bottom-[-50%] right-[-10%] w-[70%] h-[70%] rounded-full bg-blue-400/20 blur-[120px] pointer-events-none"></div>
+
+        
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0 z-10 sticky top-0">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">{t("admin.title")}</h1>
-            <p className="text-gray-600">{t("admin.subtitle")}</p>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center">
+              {activeTab === "police-control" && <><Shield className="h-5 w-5 mr-2 text-blue-400" /> Police Control Room</>}
+              {activeTab === "tourism-dept" && <><Building className="h-5 w-5 mr-2 text-blue-400" /> Tourism Department</>}
+              {activeTab === "hospital" && <><HeartPulse className="h-5 w-5 mr-2 text-blue-400" /> Hospital Dashboard</>}
+              {activeTab === "e-fir" && <><FileText className="h-5 w-5 mr-2 text-blue-400" /> E-FIR & Incident Reports</>}
+              {activeTab === "broadcast" && <><Radio className="h-5 w-5 mr-2 text-red-400" /> Automated Safety Broadcasts</>}
+            </h2>
           </div>
-          <div className="flex items-center space-x-4">
-            {offlineAlertsReceived > 0 && (
-              <Badge variant="destructive" className="flex items-center space-x-1">
-                <Satellite className="h-3 w-3" />
-                <span>{offlineAlertsReceived} Offline Alerts</span>
-              </Badge>
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-2 bg-green-500/10 px-3 py-1.5 rounded-full border border-green-500/20">
+              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+              <span className="text-xs font-medium text-green-600">Live Sync</span>
+            </div>
+
+            <button className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
+              <Bell className="h-5 w-5" />
+              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+            </button>
+
+            <div className="h-6 w-px bg-slate-200"></div>
+
+            <div className="relative">
+              <button 
+                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                className="flex items-center space-x-3 p-1 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/20">
+                  {user?.name?.charAt(0) || user?.email?.charAt(0) || "A"}
+                </div>
+                <div className="hidden md:flex flex-col text-left mr-2">
+                  <span className="text-sm font-medium text-gray-800 leading-tight">{user?.name || "Administrator"}</span>
+                  <span className="text-[10px] text-gray-500 leading-tight">Authority Portal</span>
+                </div>
+              </button>
+
+              {isProfileDropdownOpen && (
+                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-gray-200 shadow-sm rounded-xl shadow-2xl overflow-hidden py-1 z-50">
+                  <button
+                    onClick={() => {
+                      setShowProfileModal(true)
+                      setIsProfileDropdownOpen(false)
+                    }}
+                    className="w-full flex items-center space-x-2 px-4 py-2.5 text-left text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    <Settings className="h-4 w-4" />
+                    <span>Edit Profile</span>
+                  </button>
+                  <button
+                    onClick={() => signOut()}
+                    className="w-full flex items-center space-x-2 px-4 py-2.5 text-left text-sm font-medium text-red-500 hover:bg-red-50/50 transition-colors border-t border-slate-100"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-auto p-8 relative z-10">
+          <div className="max-w-7xl mx-auto">
+            
+            {/* POLICE CONTROL ROOM */}
+            {activeTab === "police-control" && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                
+                {/* Stats Row */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <Card className="bg-white/80 border-gray-200 backdrop-blur-sm">
+                    <CardHeader className="pb-2 pt-4 px-4">
+                      <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center">
+                        <Activity className="h-3.5 w-3.5 mr-1.5 text-blue-400" /> Live SOS Alerts
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4">
+                      <div className="text-3xl font-bold text-gray-900">{emergencyAlerts.length}</div>
+                      <p className="text-xs text-gray-400 mt-1">Active incidents tracking</p>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="bg-white/80 border-gray-200 backdrop-blur-sm">
+                    <CardHeader className="pb-2 pt-4 px-4">
+                      <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center">
+                        <Brain className="h-3.5 w-3.5 mr-1.5 text-purple-400" /> AI Anomalies
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4">
+                      <div className="text-3xl font-bold text-gray-900">{anomalies.length}</div>
+                      <p className="text-xs text-gray-400 mt-1">Criminal detection alerts</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Heatmap & Alerts Grid */}
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                  {/* Heatmap (Takes up 2/3) */}
+                  <div className="xl:col-span-2">
+                    <Card className="bg-white/80 border-gray-200 shadow-xl overflow-hidden h-full flex flex-col">
+                      <CardHeader className="border-b border-gray-200/50 bg-gray-50 py-4">
+                        <CardTitle className="text-sm font-semibold flex items-center">
+                          <MapPin className="h-4 w-4 mr-2 text-blue-400" />
+                          Geo-Fencing & Risk Zones
+                        </CardTitle>
+                        <CardDescription className="text-xs text-gray-500">Live monitoring of high-risk zones and deployed teams.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-0 flex-1 min-h-[400px]">
+                        <AuthorityHeatmap />
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Live SOS Alerts (Takes up 1/3) */}
+                  <div className="flex flex-col space-y-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 flex items-center">
+                      <AlertTriangle className="h-4 w-4 mr-2 text-red-400" />
+                      Live SOS Feed
+                    </h3>
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                      {emergencyAlerts.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-gray-400 bg-white/30 rounded-xl border border-gray-200/50 border-dashed">
+                          <CheckCircle className="h-8 w-8 mb-2 text-gray-600" />
+                          <span className="text-sm">No active SOS alerts</span>
+                        </div>
+                      ) : (
+                        emergencyAlerts.slice(0, 5).map((alert) => (
+                          <div key={alert.id} className={`bg-white border rounded-xl p-4 shadow-lg relative overflow-hidden group cursor-pointer transition-all hover:scale-[1.02] ${alert.status === 'resolved' ? 'border-green-500/20 shadow-green-900/5' : 'border-red-500/20 shadow-red-900/5'}`} onClick={() => { if(alert.status !== 'resolved') setSelectedAlert(alert) }}>
+                            <div className={`absolute top-0 left-0 w-1 h-full ${alert.status === 'resolved' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex items-center space-x-2">
+                                <Badge variant="destructive" className={alert.status === 'resolved' ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20"}>{alert.status === 'resolved' ? 'RESOLVED' : 'SOS'}</Badge>
+                                <span className="text-xs font-medium text-gray-900">{alert.user_name || "Unknown"}</span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 flex items-center">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {new Date(alert.created_at).toLocaleTimeString()}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-600 mb-3">{alert.message || "Emergency assistance requested"}</p>
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] text-gray-400 flex items-center bg-gray-800/50 px-2 py-1 rounded">
+                                <MapPin className="h-3 w-3 mr-1" />
+                                {alert.location_lat?.toFixed(4)}, {alert.location_lng?.toFixed(4)}
+                              </span>
+                              {alert.status !== 'resolved' && (
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px] text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 px-2 pointer-events-none">
+                                  Click to Resolve
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
             )}
-            <NotificationSystem />
-            <select 
-              value={language} 
-              onChange={(e) => setLanguage(e.target.value as any)}
-              className="px-3 py-1 border rounded text-sm bg-white cursor-pointer"
-            >
-              <option value="en">🇺🇸 English</option>
-              <option value="ml">ML Malayalam</option>
-              <option value="tl">Tl Telugu</option>
-              <option value="es">🇪🇸 Español</option>
-              <option value="fr">🇫🇷 Français</option>
-              <option value="de">🇩🇪 Deutsch</option>
-              <option value="zh">🇨🇳 中文</option>
-            </select>
-            <Badge variant="outline" className="text-blue-700 border-blue-300">
-              {user?.email?.split('@')[0]} - Admin
-            </Badge>
-            <Button
-              variant="outline"
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              className="text-muted-foreground hover:text-foreground hover:bg-destructive/10 hover:border-destructive/50 transition-all duration-200 bg-transparent"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              {t("header.logout")}
-            </Button>
-          </div>
-        </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="overview">{t("tabs.overview")}</TabsTrigger>
-            <TabsTrigger value="alerts" className="relative">
-              <Bell className="h-4 w-4 mr-2" />
-              {t("tabs.alerts")}
-              {allActiveAlerts.length > 0 && (
-                <Badge className="ml-2 bg-red-500 text-white text-xs px-1 py-0 min-w-[16px] h-4">
-                  {allActiveAlerts.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="tourists">
-              <Users className="h-4 w-4 mr-2" />
-              {t("tabs.tourists")}
-            </TabsTrigger>
-            <TabsTrigger value="ai-automation">
-              <Brain className="h-4 w-4 mr-2" />
-              {t("tabs.ai_automation")}
-            </TabsTrigger>
-            <TabsTrigger value="analytics">
-              <Shield className="h-4 w-4 mr-2" />
-              {t("tabs.analytics")}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="bg-white/80 backdrop-blur-sm border-blue-200 hover:shadow-lg transition-all duration-300">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{t("cards.active_tourists")}</CardTitle>
-                  <Users className="h-4 w-4 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {isLoadingStats ? "..." : dashboardStats.activeTourists.toLocaleString()}
-                  </div>
-                  <p className="text-xs text-muted-foreground">{t("cards.currently_tracked")}</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-sm border-green-200 hover:shadow-lg transition-all duration-300">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{t("cards.safe_zones")}</CardTitle>
-                  <Shield className="h-4 w-4 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-600">{dashboardStats.safeZones}</div>
-                  <p className="text-xs text-muted-foreground">{t("cards.monitored_areas")}</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-sm border-orange-200 hover:shadow-lg transition-all duration-300">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{t("cards.avg_response")}</CardTitle>
-                  <Clock className="h-4 w-4 text-orange-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-orange-600">{dashboardStats.avgResponseTime}</div>
-                  <p className="text-xs text-muted-foreground">{t("cards.emergency_response")}</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-sm border-purple-200 hover:shadow-lg transition-all duration-300">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{t("cards.ai_efficiency")}</CardTitle>
-                  <Brain className="h-4 w-4 text-purple-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-purple-600">{dashboardStats.aiEfficiency}</div>
-                  <p className="text-xs text-muted-foreground">{t("cards.threat_detection")}</p>
-                </CardContent>
-              </Card>
-            </div>
-            {/* Add this card after the existing overview cards */}
-<Card>
-  <CardHeader>
-    <CardTitle className="flex items-center gap-2">
-      <Users className="h-5 w-5" />
-      Tourist Emergency Status
-      {touristData.filter((t: any) => t.offline_alerts?.length > 0).length > 0 && (
-        <Badge variant="destructive" className="animate-pulse">
-          {touristData.filter((t: any) => t.offline_alerts?.length > 0).length} OFFLINE ALERTS
-        </Badge>
-      )}
-    </CardTitle>
-  </CardHeader>
-  <CardContent>
-    {touristData.length === 0 ? (
-      <p className="text-gray-500 text-center py-4">No tourist data available</p>
-    ) : (
-      <div className="space-y-4 max-h-96 overflow-y-auto">
-        {touristData.map((tourist: any) => (
-          <div key={tourist.user_id} className={`p-4 border rounded-lg ${
-            tourist.status === 'emergency' ? 'border-red-300 bg-red-50' : 'border-gray-200'
-          }`}>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold">{tourist.name}</h3>
-              <div className="flex items-center gap-2">
-                <Badge variant={tourist.status === 'emergency' ? 'destructive' : 'default'}>
-                  {tourist.status.toUpperCase()}
-                </Badge>
-                {tourist.offline_alerts && tourist.offline_alerts.length > 0 && (
-                  <Badge variant="secondary" className="bg-orange-100 text-orange-800">
-                    <WifiOff className="h-3 w-3 mr-1" />
-                    {tourist.offline_alerts.length} OFFLINE
-                  </Badge>
-                )}
-              </div>
-            </div>
-            <div className="text-sm text-gray-600 space-y-1">
-              <p className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                Location: {tourist.location}
-              </p>
-              <p className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Last Seen: {new Date(tourist.last_seen).toLocaleString()}
-              </p>
-              {tourist.offline_alerts && tourist.offline_alerts.length > 0 && (
-                <div className="mt-3">
-                  <p className="font-medium text-red-600 flex items-center gap-1">
-                    <AlertTriangle className="h-4 w-4" />
-                    Offline Emergency Alerts ({tourist.offline_alerts.length})
-                  </p>
-                  <div className="mt-2 space-y-2">
-                    {tourist.offline_alerts.slice(0, 3).map((alert: any) => (
-                      <div key={alert.id} className="p-3 bg-red-50 border border-red-200 rounded text-xs">
-                        <div className="flex items-center justify-between mb-1">
-                          <Badge variant="destructive" className="text-xs">
-                            {alert.type.toUpperCase()}
-                          </Badge>
-                          <span className="text-gray-500">
-                            {new Date(alert.created_at).toLocaleString()}
-                          </span>
-                        </div>
-                        <p className="font-medium mb-1">{alert.message}</p>
-                        <p className="text-gray-500 flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {alert.location}
-                        </p>
-                        {!alert.acknowledged && (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="mt-2 text-xs"
-                            onClick={() => {
-                              // Acknowledge alert
-                              const updatedTourists = touristData.map((t: any) => 
-                                t.user_id === tourist.user_id 
-                                  ? {
-                                      ...t,
-                                      offline_alerts: t.offline_alerts.map((a: any) => 
-                                        a.id === alert.id 
-                                          ? { ...a, acknowledged: true, acknowledged_at: new Date().toISOString() }
-                                          : a
-                                      )
-                                    }
-                                  : t
-                              )
-                              localStorage.setItem('adminTouristData', JSON.stringify(updatedTourists))
-                              setTouristData(updatedTourists)
-                            }}
-                          >
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Acknowledge
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                    {tourist.offline_alerts.length > 3 && (
-                      <p className="text-xs text-gray-500 text-center">
-                        +{tourist.offline_alerts.length - 3} more alerts
-                      </p>
-                    )}
+            {/* TOURISM DEPARTMENT */}
+            {activeTab === "tourism-dept" && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="flex justify-between items-end mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-1">Tourist Blockchain Registry</h2>
+                    <p className="text-sm text-gray-500">Secure identity storage and travel history monitoring</p>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    )}
-  </CardContent>
-</Card>
 
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Activity className="h-5 w-5 text-blue-500" />
-                    <span>{t("cards.recent_activity")}</span>
-                  </CardTitle>
-                  <CardDescription>{t("cards.latest_system_events")}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {recentActivity.length === 0 ? (
-                      <p className="text-gray-500 text-center py-4">{t("cards.no_recent_activity")}</p>
-                    ) : (
-                      recentActivity.slice(0, 5).map((activity, index) => (
-                        <div key={index} className="flex items-start space-x-3">
-                          <div className={`w-2 h-2 rounded-full mt-2 ${
-                            activity.type === 'emergency' ? 'bg-red-500' :
-                            activity.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
-                          }`} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900">{activity.message}</p>
-                            <p className="text-xs text-gray-500">{activity.time}</p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <TrendingUp className="h-5 w-5 text-green-500" />
-                    <span>{t("cards.system_performance")}</span>
-                  </CardTitle>
-                  <CardDescription>{t("cards.real_time_metrics")}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{t("cards.server_uptime")}</span>
-                      <span className="text-sm text-green-600">99.9%</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{t("cards.database_health")}</span>
-                      <span className="text-sm text-green-600">{t("cards.excellent")}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{t("cards.api_response")}</span>
-                      <span className="text-sm text-green-600">145ms</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Offline Alerts</span>
-                      <span className="text-sm text-purple-600">{offlineAlertsReceived} received</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <AuthorityHeatmap />
-          </TabsContent>
-
-          <TabsContent value="alerts" className="space-y-6">
-            <div className="grid gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <AlertTriangle className="h-5 w-5 text-red-500" />
-                    <span>{t("cards.active_alerts")} ({allActiveAlerts.length})</span>
-                    {offlineAlertsReceived > 0 && (
-                      <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50">
-                        {meshAlerts.length} from offline sources
-                      </Badge>
-                    )}
-                  </CardTitle>
-                  <CardDescription>{t("cards.immediate_attention_required")}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {allActiveAlerts.length === 0 ? (
-                    <p className="text-gray-500 text-center py-8">{t("cards.no_active_alerts")}</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {allActiveAlerts.map((alert) => (
-                        <div key={alert.id} className="border border-red-200 rounded-lg p-4 bg-red-50">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-2 mb-2">
-                                {getAlertSourceIcon(alert.source)}
-                                <Badge variant="destructive">{alert.type}</Badge>
-                                <span className="text-sm font-medium">{alert.touristName}</span>
-                                {getAlertSourceBadge(alert.source)}
-                                <Badge className="bg-red-100 text-red-800">{alert.severity}</Badge>
-                              </div>
-                              <p className="text-sm text-gray-700 mb-2">{alert.message}</p>
-                              <div className="flex items-center space-x-4 text-xs text-gray-500">
-                                <div className="flex items-center space-x-1">
-                                  <Clock className="h-3 w-3" />
-                                  <span>{new Date(alert.timestamp || alert.received_at).toLocaleTimeString()}</span>
-                                </div>
-                                {alert.location && (
-                                  <div className="flex items-center space-x-1">
-                                    <MapPin className="h-3 w-3" />
-                                    <span>{alert.location.lat.toFixed(4)}, {alert.location.lng.toFixed(4)}</span>
-                                    {alert.location_accuracy && (
-                                      <span>(±{Math.round(alert.location_accuracy)}m)</span>
-                                    )}
+                <Card className="bg-white border-gray-200 shadow-xl">
+                  <CardHeader className="border-b border-gray-200/50 bg-gray-50">
+                    <CardTitle className="text-sm font-semibold text-gray-900">Registered Tourists</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-gray-500 uppercase bg-gray-100 border-b border-gray-200">
+                          <tr>
+                            <th className="px-6 py-4 font-medium">Tourist Name</th>
+                            <th className="px-6 py-4 font-medium">Blockchain ID</th>
+                            <th className="px-6 py-4 font-medium">Status</th>
+                            <th className="px-6 py-4 font-medium">Registration Date</th>
+                            <th className="px-6 py-4 font-medium text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-800">
+                          {touristProfiles.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-6 py-8 text-center text-gray-400">No registered tourists found.</td>
+                            </tr>
+                          ) : (
+                            touristProfiles.map((profile) => (
+                              <tr key={profile.id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center space-x-3">
+                                    <div className="h-8 w-8 rounded-full bg-blue-900/30 flex items-center justify-center text-blue-400 font-medium">
+                                      {profile.name?.charAt(0) || "T"}
+                                    </div>
+                                    <div>
+                                      <div className="font-medium text-gray-800">{profile.name || "Unknown"}</div>
+                                      <div className="text-[10px] text-gray-400">{profile.email}</div>
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex space-x-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setSelectedAlert(selectedAlert?.id === alert.id ? null : alert)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
-                              >
-                                <Brain className="h-4 w-4 mr-1" />
-                                {t("cards.ai_analysis")}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleResolveRealAlert(alert.id)}
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                {t("cards.resolve")}
-                              </Button>
-                            </div>
-                          </div>
-                          {selectedAlert?.id === alert.id && (
-                            <AIAlertAnalysis
-                              alert={alert}
-                              onResponsePlanGenerated={(plan) => console.log("Response plan:", plan)}
-                            />
+                                </td>
+                                <td className="px-6 py-4 font-mono text-[10px] text-blue-400/80">
+                                  {profile.blockchain_id || `BC-${profile.id.substring(0, 8).toUpperCase()}`}
+                                </td>
+                                <td className="px-6 py-4">
+                                  <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/20">
+                                    {profile.is_active ? 'Active' : 'Verified'}
+                                  </Badge>
+                                </td>
+                                <td className="px-6 py-4 text-gray-500 text-xs">
+                                  {new Date(profile.created_at).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <Button onClick={() => setSelectedTourist(profile)} size="sm" variant="ghost" className="h-7 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-500/10">
+                                    View Details
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))
                           )}
-                        </div>
-                      ))}
+                        </tbody>
+                      </table>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                    <span>{t("cards.resolved_alerts")} ({allResolvedAlerts.length})</span>
-                  </CardTitle>
-                  <CardDescription>{t("cards.recently_resolved_incidents")}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {allResolvedAlerts.length === 0 ? (
-                    <p className="text-gray-500 text-center py-8">{t("cards.no_resolved_alerts")}</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {allResolvedAlerts.slice(0, 5).map((alert) => (
-                        <div key={alert.id} className="border border-green-200 rounded-lg p-4 bg-green-50">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-2 mb-2">
-                                <Badge variant="outline" className="text-green-700 border-green-300">
-                                  {alert.type}
-                                </Badge>
-                                <span className="text-sm font-medium">{alert.touristName}</span>
-                                <Badge className="bg-green-100 text-green-800">{t("cards.resolved")}</Badge>
-                              </div>
-                              <p className="text-sm text-gray-700 mb-2">{alert.message}</p>
-                              <div className="flex items-center space-x-4 text-xs text-gray-500">
-                                <div className="flex items-center space-x-1">
-                                  <Clock className="h-3 w-3" />
-                                  <span>{new Date(alert.timestamp).toLocaleTimeString()}</span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex space-x-2">
-                              <AIIncidentReport alert={alert} />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="tourists" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Users className="h-5 w-5 text-blue-500" />
-                  <span>{t("cards.registered_tourists")} ({tourists.length})</span>
-                </CardTitle>
-                <CardDescription>{t("cards.manage_tourist_profiles")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {tourists.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">{t("cards.no_tourists_registered")}</p>
-                ) : (
-                  <div className="space-y-4">
-                    {tourists.slice(0, 10).map((tourist) => (
-                      <div key={tourist.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                              <Users className="h-5 w-5 text-blue-600" />
-                            </div>
-                            <div>
-                              <h3 className="font-medium">{tourist.name}</h3>
-                              <p className="text-sm text-gray-500">{tourist.email}</p>
-                              <div className="flex items-center space-x-2 mt-1">
-                                <Badge variant={tourist.status === 'active' ? 'default' : 'secondary'}>
-                                  {tourist.status}
-                                </Badge>
-                                <span className="text-xs text-gray-400">{tourist.nationality}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewTouristDetails(tourist)}
-                            >
-                              {t("cards.view_details")}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleSendAlert(tourist)}
-                              className="bg-orange-500 hover:bg-orange-600 text-white"
-                            >
-                              {t("cards.send_alert")}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="ai-automation" className="space-y-6">
-            <div className="grid gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Brain className="h-5 w-5 text-purple-500" />
-                    <span>{t("tabs.ai_systems")}</span>
-                  </CardTitle>
-                  <CardDescription>{t("cards.monitor_and_control")}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="text-center p-4 bg-purple-50 rounded-lg">
-                      <div className="text-3xl font-bold text-purple-600 mb-2">97.3%</div>
-                      <div className="text-sm text-gray-600">{t("cards.threat_detection_accuracy")}</div>
-                    </div>
-                    <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <div className="text-3xl font-bold text-blue-600 mb-2">1.8s</div>
-                      <div className="text-sm text-gray-600">{t("cards.ai_analysis_speed")}</div>
-                    </div>
-                    <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <div className="text-3xl font-bold text-green-600 mb-2">24/7</div>
-                      <div className="text-sm text-gray-600">{t("cards.automated_monitoring")}</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="analytics" className="space-y-6">
-            <div className="grid gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t("tabs.analytics")}</CardTitle>
-                  <CardDescription>{t("cards.performance_metrics")}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-blue-600">98.5%</div>
-                      <p className="text-sm text-gray-600">{t("cards.system_uptime")}</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-green-600">2.1s</div>
-                      <p className="text-sm text-gray-600">{t("cards.avg_response_time")}</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-orange-500">{allActiveAlerts.length}</div>
-                      <p className="text-sm text-gray-600">{t("cards.alerts_today")}</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-purple-600">{offlineAlertsReceived}</div>
-                      <p className="text-sm text-gray-600">Offline Alerts Received</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </div>
-
-      {showTouristDetails && selectedTourist && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-2xl mx-4">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Tourist Details - {selectedTourist.name}</span>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => setShowTouristDetails(false)}
-                >
-                  ✕
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-medium mb-2">Personal Information</h4>
-                  <div className="space-y-2 text-sm">
-                    <div><span className="text-muted-foreground">Name:</span> {selectedTourist.name}</div>
-                    <div><span className="text-muted-foreground">Email:</span> {selectedTourist.email}</div>
-                    <div><span className="text-muted-foreground">Nationality:</span> {selectedTourist.nationality}</div>
-                    <div><span className="text-muted-foreground">Visa Type:</span> {selectedTourist.visa_type}</div>
+            {/* HOSPITAL DASHBOARD */}
+            {activeTab === "hospital" && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="flex justify-between items-end mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-1">Medical Emergencies</h2>
+                    <p className="text-sm text-gray-500">Live medical SOS and patient routing</p>
                   </div>
                 </div>
-                <div>
-                  <h4 className="font-medium mb-2">Verification & Location</h4>
-                  <div className="space-y-2 text-sm">
-                    <div><span className="text-muted-foreground">Blockchain ID:</span> 
-                      <div className="font-mono text-xs bg-slate-100 p-1 rounded mt-1">
-                        {selectedTourist.blockchain_id || "Not verified"}
-                      </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {medicalAlerts.length === 0 ? (
+                    <div className="col-span-full flex flex-col items-center justify-center py-16 bg-white/50 border border-gray-200/50 rounded-xl border-dashed">
+                      <HeartPulse className="h-10 w-10 text-gray-600 mb-3" />
+                      <h3 className="text-gray-600 font-medium">No Medical Emergencies</h3>
+                      <p className="text-sm text-gray-400 mt-1">All clear across hospital zones.</p>
                     </div>
-                    <div><span className="text-muted-foreground">Entry Date:</span> {new Date(selectedTourist.entry_date).toLocaleDateString()}</div>
-                    <div><span className="text-muted-foreground">Current Location:</span> {selectedTourist.location_lat?.toFixed(4)}, {selectedTourist.location_lng?.toFixed(4)}</div>
-                    <div><span className="text-muted-foreground">Last Seen:</span> {selectedTourist.last_seen}</div>
-                  </div>
+                  ) : (
+                    medicalAlerts.map(alert => (
+                      <Card key={alert.id} className="bg-white border-red-500/30 overflow-hidden shadow-lg shadow-red-900/10 relative">
+                        <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-red-500 to-orange-500 animate-pulse"></div>
+                        <CardHeader className="pb-3 pt-5">
+                          <div className="flex justify-between items-start">
+                            <Badge variant="destructive" className="bg-red-500/20 text-red-400 hover:bg-red-500/30">MEDICAL SOS</Badge>
+                            <span className="text-xs text-gray-400 flex items-center">
+                              <Clock className="h-3 w-3 mr-1" />
+                              {Math.floor((Date.now() - new Date(alert.created_at).getTime()) / 60000)} mins ago
+                            </span>
+                          </div>
+                          <CardTitle className="text-lg mt-3 text-gray-900">{alert.user_name || "Unknown Patient"}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="bg-red-950/30 border border-red-500/20 p-3 rounded-lg">
+                            <p className="text-sm text-red-200">{alert.message || "Immediate medical attention requested."}</p>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-xs border-b border-gray-200 pb-2">
+                              <span className="text-gray-400">Location</span>
+                              <span className="text-gray-600 font-medium font-mono">{alert.location_lat?.toFixed(4)}, {alert.location_lng?.toFixed(4)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs border-b border-gray-200 pb-2">
+                              <span className="text-gray-400">Emergency Contact</span>
+                              <span className="text-gray-600 font-medium">On File (Fetch ID)</span>
+                            </div>
+                            <div className="flex justify-between text-xs pb-1">
+                              <span className="text-gray-400">Status</span>
+                              <span className="text-yellow-400 font-medium animate-pulse">Awaiting Ambulance</span>
+                            </div>
+                          </div>
+                          
+                          <Button className="w-full bg-red-600 hover:bg-red-700 text-gray-900 mt-2">
+                            Dispatch Ambulance
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+            )}
 
-      <AIChatAssistant touristName={user?.name} location={t("cards.authority_command_center")} />
+            {/* E-FIR & REPORTS */}
+            {activeTab === "e-fir" && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                 <div className="flex justify-between items-end mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-1">Incident Report Generator</h2>
+                    <p className="text-sm text-gray-500">Downloadable PDF reports accessible by Admin & Police</p>
+                  </div>
+                </div>
+
+                <Card className="bg-white border-gray-200">
+                  <CardHeader className="border-b border-gray-200/50 bg-gray-50">
+                    <CardTitle className="text-sm font-semibold text-gray-900">Recent Incident Logs</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-gray-500 uppercase bg-gray-100 border-b border-gray-200">
+                          <tr>
+                            <th className="px-6 py-4 font-medium">Incident ID</th>
+                            <th className="px-6 py-4 font-medium">Type</th>
+                            <th className="px-6 py-4 font-medium">Date & Time</th>
+                            <th className="px-6 py-4 font-medium">Status</th>
+                            <th className="px-6 py-4 font-medium text-right">E-FIR</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-800">
+                          {emergencyAlerts.map((alert) => (
+                            <tr key={alert.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-6 py-4 font-mono text-[10px] text-gray-500">
+                                INC-{alert.id.substring(0, 8).toUpperCase()}
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="capitalize text-gray-800">{alert.type || 'General SOS'}</span>
+                              </td>
+                              <td className="px-6 py-4 text-gray-500 text-xs">
+                                {new Date(alert.created_at).toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4">
+                                <Badge variant="outline" className={alert.status === 'resolved' ? "bg-green-500/10 text-green-400 border-green-500/20" : "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"}>
+                                  {alert.status || 'Active'}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <Button size="sm" variant="outline" className="h-7 text-xs border-gray-300 hover:bg-gray-100 text-gray-600">
+                                  <FileText className="h-3 w-3 mr-2" />
+                                  Download PDF
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+          </div>
+        </div>
+      </main>
     </div>
   )
 }

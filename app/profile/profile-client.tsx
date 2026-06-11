@@ -52,7 +52,7 @@ export default function ProfileClientPage() {
         }
 
         fetchProfile()
-    }, [Database])
+    }, [])
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -62,14 +62,13 @@ export default function ProfileClientPage() {
         setMessage(null)
 
         try {
-            const { error } = await Database
+            const { error } = await dbClient
                 .from("profiles")
                 .update({
                     full_name: profile.full_name,
                     phone: profile.phone,
                     emergency_contact: profile.emergency_contact,
                     emergency_phone: profile.emergency_phone,
-                    updated_at: new Date().toISOString(),
                 })
                 .eq("id", profile.id)
 

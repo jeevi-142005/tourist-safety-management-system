@@ -12,6 +12,7 @@ import {
 interface AuthUser {
   id: string
   email: string
+  name?: string
   role?: string
 }
 
@@ -40,6 +41,7 @@ function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
         setUser({
           id: (session.user as any).id || "",
           email: session.user.email || "",
+          name: session.user.name || session.user.email?.split('@')[0] || "",
           role: (session.user as any).role || "tourist",
         })
       } else {
@@ -97,7 +99,7 @@ function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      await nextAuthSignOut({ redirect: false })
+      await nextAuthSignOut({ callbackUrl: "/auth/login" })
       console.log("[NextAuth] Sign out successful")
     } catch (error) {
       console.error("[NextAuth] Sign out error:", error)

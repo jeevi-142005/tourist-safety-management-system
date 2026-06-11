@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: profile } = await Database
+    const { data: profile } = await dbClient
       .from('profiles')
       .select('role')
       .eq('id', user.id)
@@ -21,50 +21,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    const { data: activeTourists, count: activeTouristsCount } = await Database
-      .from('digital_tourist_ids')
-      .select('*', { count: 'exact' })
+    const { data: activeTourists, count: activeTouristsCount } = await dbClient
+      .from('tourist_ids')
+      .select('*')
       .eq('is_active', true)
       .gte('trip_end_date', new Date().toISOString().split('T')[0]);
 
-    const { data: activeAlerts } = await Database
+    const { data: activeAlerts } = await dbClient
       .from('alerts')
-      .select(`
-        *,
-        profiles:user_id (
-          full_name,
-          email,
-          phone
-        )
-      `)
+      .select(`*, profiles:user_id (full_name, email, phone)`)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(50);
 
-    const { data: heatmapData } = await Database
-      .rpc('get_tourist_heatmap_data', {
-        hours_back: 24
-      });
+    const { data: heatmapData } = await dbClient
+      .rpc('get_tourist_heatmap_data', { hours_back: 24 });
 
-    const { data: riskZones } = await Database
+    const { data: riskZones } = await dbClient
       .from('geo_zones')
       .select('*')
       .in('zone_type', ['high_risk', 'restricted']);
 
-    const { data: recentEFIRs } = await Database
+    const { data: recentEFIRs } = await dbClient
       .from('efir_records')
-      .select(`
-        *,
-        alerts:alert_id (
-          alert_type,
-          severity,
-          message
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
       .limit(20);
 
-    const { data: safetyStats } = await Database
+    const { data: safetyStats } = await dbClient
       .rpc('get_safety_score_statistics');
 
     return NextResponse.json({

@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Analyze with Gemini AI
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
     const prompt = `
     Analyze the following tourist location data for anomalies and safety concerns:

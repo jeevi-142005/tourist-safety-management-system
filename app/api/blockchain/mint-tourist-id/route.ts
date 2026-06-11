@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update user profile with blockchain ID and QR code
-    const { error: updateError } = await Database
+    const { error: updateError } = await dbClient
       .from("profiles")
       .update({
         blockchain_id: tokenId,

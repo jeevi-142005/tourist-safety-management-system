@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
         ? `You have entered ${zone_name}. Please exercise caution and follow safety guidelines.`
         : `You have exited ${zone_name}. Stay alert and maintain safety protocols.`
 
-    const { data: userAlert, error: userAlertError } = await Database
+    const { data: userAlert, error: userAlertError } = await dbClient
       .from("user_alerts")
       .insert({
         user_id: user.id,
@@ -150,7 +150,7 @@ async function analyzeGeofenceEvent(
   longitude: number,
 ) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
     const prompt = `
     Analyze this geofence security event:
@@ -224,7 +224,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get recent geofence alerts for the user
-    const { data: alerts, error } = await Database
+    const { data: alerts, error } = await dbClient
       .from("user_alerts")
       .select("*")
       .eq("user_id", user.id)

@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const dbClient = await createClient()
 
     // Verify the digital ID exists and is valid
-    const { data: touristID, error } = await Database
+    const { data: touristID, error } = await dbClient
       .from("tourist_ids")
       .select(`
         *,

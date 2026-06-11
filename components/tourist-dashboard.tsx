@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { EditProfileModal } from "@/components/edit-profile-modal"
 import {
   Shield,
   AlertTriangle,
@@ -37,8 +38,7 @@ import { LoadingSpinner } from "@/components/loading-spinner"
 import { EmergencyAlert } from "./emergency-alert"
 import { AISafetyAssistant } from "./ai-safety-assistant"
 import { AIChatAssistant } from "./ai-chat-assistant"
-import { DigitalIDGenerator } from "./digital-id-generator"
-import { DigitalIDDisplay } from "./digital-id-display"
+import { DigitalIDTab } from "./digital-id-tab"
 import { LiveTrackingMap } from "./live-tracking-map"
 import { EnhancedEmergencySystem } from "./enhanced-emergency-system"
 import { AIAnomalyDetector } from "./ai-anomaly-detector"
@@ -58,12 +58,16 @@ export function TouristDashboard() {
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [digitalIdInfo, setDigitalIdInfo] = useState<any>(null)
+  const [showProfileModal, setShowProfileModal] = useState(false)
 
   useEffect(() => {
     if (!user) return
+
+    // Fetch user profile via the DB proxy
     const fetchProfile = async () => {
       try {
-        const { data, error } = await Database
+        const { data } = await dbClient
           .from("profiles")
           .select("*")
           .eq("id", user.id)
@@ -79,7 +83,24 @@ export function TouristDashboard() {
         console.error("Failed to fetch user profile:", err)
       }
     }
+
+    // Fetch the user's active Digital Tourist ID for the profile section
+    const fetchDigitalId = async () => {
+      try {
+        const res = await fetch("/api/digital-id")
+        if (res.ok) {
+          const result = await res.json()
+          const ids = result.data || []
+          const active = ids.find((t: any) => t.is_active) ?? ids[0] ?? null
+          setDigitalIdInfo(active)
+        }
+      } catch (err) {
+        console.error("Failed to fetch digital ID for profile:", err)
+      }
+    }
+
     fetchProfile()
+    fetchDigitalId()
   }, [user])
 
   const handleSaveProfile = async (e: any) => {
@@ -90,7 +111,7 @@ export function TouristDashboard() {
     setProfileError(null)
 
     try {
-      const { data, error } = await Database
+      const { data, error } = await dbClient
         .from("profiles")
         .update({
           full_name: profileName,
@@ -471,8 +492,7 @@ export function TouristDashboard() {
               { id: "digital-id", label: "Digital ID", icon: <User className="h-4 w-4" /> },
               { id: "emergency", label: "Emergency+", icon: <Zap className="h-4 w-4" /> },
               { id: "safety", label: "Safety Tips", icon: <Shield className="h-4 w-4" /> },
-              { id: "ai-assistant", label: "AI Assistant", icon: <Brain className="h-4 w-4" /> },
-              { id: "gemini-ai", label: "Gemini AI", icon: <Brain className="h-4 w-4" /> },
+              { id: "ai-assistant", label: "AI Safety Panel", icon: <Brain className="h-4 w-4" /> },
               { id: "ai-anomaly", label: "Reports", icon: <Clock className="h-4 w-4" /> },
               { id: "profile", label: "Settings", icon: <Settings className="h-4 w-4" /> },
             ].map((item) => {
@@ -596,7 +616,7 @@ export function TouristDashboard() {
                     
                     <button
                       onClick={() => {
-                        setActiveTab("profile");
+                        setShowProfileModal(true);
                         setIsProfileDropdownOpen(false);
                       }}
                       className="w-full flex items-center space-x-2 px-3 py-2 text-left text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
@@ -607,10 +627,10 @@ export function TouristDashboard() {
                     
                     <button
                       onClick={() => {
-                        handleLogout();
+                        signOut();
                         setIsProfileDropdownOpen(false);
                       }}
-                      className="w-full flex items-center space-x-2 px-3 py-2 text-left text-xs font-medium text-red-650 hover:bg-red-50 hover:text-red-750 transition-colors border-t border-gray-100"
+                      className="w-full flex items-center space-x-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-750 transition-colors border-t border-gray-100"
                     >
                       <LogOut className="h-3.5 w-3.5" />
                       <span>Logout</span>
@@ -742,7 +762,6 @@ export function TouristDashboard() {
                       label="Emergency"
                       description="Immediate help response"
                       className="bg-transparent hover:bg-red-50 text-red-600 border border-red-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
-                      size="default"
                     />
 
                     {/* 2. Medical */}
@@ -752,7 +771,6 @@ export function TouristDashboard() {
                       label="Medical"
                       description="Health assistance"
                       className="bg-transparent hover:bg-orange-50 text-orange-600 border border-orange-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
-                      size="default"
                     />
 
                     {/* 3. Security */}
@@ -762,7 +780,6 @@ export function TouristDashboard() {
                       label="Security"
                       description="Report any incident"
                       className="bg-transparent hover:bg-yellow-50 text-yellow-600 border border-yellow-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
-                      size="default"
                     />
 
                     {/* 4. Assistance */}
@@ -772,7 +789,6 @@ export function TouristDashboard() {
                       label="Assistance"
                       description="General travel support"
                       className="bg-transparent hover:bg-blue-50 text-blue-600 border border-blue-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
-                      size="default"
                     />
                   </div>
                 </CardContent>
@@ -1329,17 +1345,7 @@ export function TouristDashboard() {
 
           {/* TAB 3: DIGITAL ID */}
           {activeTab === "digital-id" && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="text-center max-w-xl mx-auto mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">Digital Tourist ID</h2>
-                <p className="text-xs text-gray-500">Your verified travel credentials secured on the local register blockchain.</p>
-              </div>
-              <DigitalIDDisplay />
-              <div className="border-t border-gray-200 pt-6">
-                <h3 className="text-base font-bold text-gray-800 mb-4">Generate Digital ID</h3>
-                <DigitalIDGenerator />
-              </div>
-            </div>
+            <DigitalIDTab />
           )}
 
           {/* TAB 4: LIVE TRACKING */}
@@ -1349,7 +1355,7 @@ export function TouristDashboard() {
                 <h2 className="text-2xl font-bold text-gray-900 mb-1">GPS Tracking & Safe Zones</h2>
                 <p className="text-xs text-gray-500">View safe perimeters, hospitals, police stations, and tracked travel companions.</p>
               </div>
-              <LiveTrackingMap currentLocation={currentLocation} />
+              <LiveTrackingMap />
             </div>
           )}
 
@@ -1417,20 +1423,15 @@ export function TouristDashboard() {
             </div>
           )}
 
-          {/* TAB 7: AI ASSISTANT DETAILED PANEL */}
+          {/* TAB 7: AI SAFETY PANEL (Combined) */}
           {activeTab === "ai-assistant" && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="text-center max-w-xl mx-auto mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">AI Safety Assistant</h2>
-                <p className="text-xs text-gray-500">Ask safety questions, check crime indexes, or query regional travel guidelines.</p>
+            <div className="space-y-8 animate-in fade-in duration-200">
+              <div className="text-center max-w-xl mx-auto">
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">AI Safety Panel</h2>
+                <p className="text-xs text-gray-500">Comprehensive AI risk analysis and personalized safety advice powered by Google Gemini.</p>
               </div>
+              
               <AISafetyAssistant />
-            </div>
-          )}
-
-          {/* TAB 8: GEMINI AI ADVISOR */}
-          {activeTab === "gemini-ai" && (
-            <div className="space-y-6 animate-in fade-in duration-200">
               <AISafetyAdvisor />
             </div>
           )}
@@ -1533,31 +1534,71 @@ export function TouristDashboard() {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-gray-600">
-                    <div className="space-y-3">
-                      <div>
-                        <span className="font-semibold block mb-1">Registered Blockchain ID</span>
-                        <code className="bg-gray-100 p-2 rounded block font-mono text-[10px] text-gray-800 truncate">{profile?.blockchain_id || user?.blockchainId || "BLK-MOCK-7A4B9"}</code>
+                  <div className="pt-4 border-t border-gray-100 space-y-4 text-xs text-gray-600">
+                    {/* Blockchain Digital ID panel */}
+                    {digitalIdInfo ? (
+                      <div className="bg-gradient-to-r from-blue-600 to-purple-700 rounded-xl p-4 text-white space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Shield className="h-4 w-4" />
+                            <span className="font-semibold text-sm">Digital Tourist ID — Active</span>
+                          </div>
+                          <Badge className="bg-white/20 text-white border-white/30 text-[10px]">
+                            {digitalIdInfo.is_active ? "✓ Verified" : "Inactive"}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-[10px] opacity-70 uppercase tracking-wide">Document Type</p>
+                            <p className="font-semibold capitalize mt-0.5">{digitalIdInfo.document_type}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] opacity-70 uppercase tracking-wide">Document No.</p>
+                            <p className="font-semibold mt-0.5">***{digitalIdInfo.document_number?.slice(-4)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] opacity-70 uppercase tracking-wide">Valid From</p>
+                            <p className="font-semibold mt-0.5">{new Date(digitalIdInfo.valid_from).toLocaleDateString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] opacity-70 uppercase tracking-wide">Valid Until</p>
+                            <p className="font-semibold mt-0.5">{new Date(digitalIdInfo.valid_until).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] opacity-70 uppercase tracking-wide mb-1">Blockchain Hash</p>
+                          <code className="bg-white/10 rounded p-2 block font-mono text-[10px] break-all">
+                            0x{digitalIdInfo.blockchain_hash?.slice(0, 48)}...
+                          </code>
+                        </div>
+                        <div>
+                          <p className="text-[10px] opacity-70 uppercase tracking-wide mb-1">Created</p>
+                          <p className="text-[11px]">{new Date(digitalIdInfo.created_at).toLocaleString()}</p>
+                        </div>
                       </div>
-                      <div>
-                        <span className="font-semibold block mb-1">Creation Timestamp</span>
-                        <span className="bg-gray-50 p-2 rounded block text-gray-800">
-                          {profile?.created_at ? new Date(profile.created_at).toLocaleString() : user?.createdAt ? new Date(user.createdAt).toLocaleString() : new Date().toLocaleString()}
-                        </span>
+                    ) : (
+                      <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-4 text-center">
+                        <Shield className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-gray-500 text-xs font-medium">No Digital Tourist ID created yet</p>
+                        <p className="text-gray-400 text-[10px] mt-1">Go to the Digital ID tab to generate your blockchain-verified identity.</p>
                       </div>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <div>
-                        <span className="font-semibold block mb-1">Status Verification</span>
-                        <span className="bg-emerald-50 text-emerald-800 p-2 rounded block border border-emerald-100 font-medium flex items-center space-x-1.5">
-                          <CheckCircle className="h-4.5 w-4.5 text-emerald-600" />
-                          <span>Active / Safe Profile</span>
-                        </span>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-3">
+                        <div>
+                          <span className="font-semibold block mb-1">Status Verification</span>
+                          <span className="bg-emerald-50 text-emerald-800 p-2 rounded block border border-emerald-100 font-medium flex items-center space-x-1.5">
+                            <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                            <span>Active / Safe Profile</span>
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="font-semibold block mb-1">User Account Role</span>
-                        <span className="bg-gray-50 p-2 rounded block text-gray-800 uppercase tracking-wider font-semibold">{user?.role || "tourist"}</span>
+                      <div className="space-y-3">
+                        <div>
+                          <span className="font-semibold block mb-1">User Account Role</span>
+                          <span className="bg-gray-50 p-2 rounded block text-gray-800 uppercase tracking-wider font-semibold">{user?.role || "tourist"}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1577,7 +1618,7 @@ export function TouristDashboard() {
                     <Button
                       type="submit"
                       disabled={isSavingProfile}
-                      className="bg-blue-650 hover:bg-blue-750 text-white font-semibold py-2 px-4 rounded-lg text-xs transition-colors shadow-sm"
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg text-xs transition-colors shadow-sm"
                     >
                       {isSavingProfile ? <LoadingSpinner size="sm" /> : "Save Changes"}
                     </Button>

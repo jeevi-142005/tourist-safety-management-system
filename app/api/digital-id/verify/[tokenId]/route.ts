@@ -1,72 +1,65 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/db-client/server"
-import { blockchainClient } from "@/lib/blockchain/client"
+import { db } from "@/lib/db"
 
-export async function GET(request: NextRequest, props: { params: Promise<{ tokenId: string }> }) {
+export async function GET(
+  request: NextRequest,
+  props: { params: Promise<{ tokenId: string }> }
+) {
   try {
-    const params = await props.params;
-    const dbClient = await createServerClient()
+    const { tokenId } = await props.params
 
+    // Look up the TouristId by blockchain_hash, including the owner user
+    const digitalId = await db.touristId.findFirst({
+      where: { blockchainHash: tokenId },
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+    })
 
-    const { tokenId } = params
-
-    // Verify on blockchain
-    const blockchainData = await blockchainClient.verifyDigitalID(tokenId)
-
-    if (!blockchainData.isActive) {
-      return NextResponse.json({
-        valid: false,
-        reason: "Digital ID has been deactivated",
-      })
+    if (!digitalId) {
+      return NextResponse.json({ valid: false, reason: "Digital ID not found" })
     }
 
-    // Check if still valid
-    const now = Math.floor(Date.now() / 1000)
-    if (blockchainData.validUntil < now) {
-      return NextResponse.json({
-        valid: false,
-        reason: "Digital ID has expired",
-      })
+    if (!digitalId.isActive) {
+      return NextResponse.json({ valid: false, reason: "Digital ID has been deactivated" })
     }
 
-    // Get additional details from database
-    const { data: digitalId } = await dbClient
-      .from("digital_tourist_ids")
-      .select(`
-        *,
-        profiles:user_id (
-          full_name,
-          email,
-          phone
-        )
-      `)
-      .eq("blockchain_hash", tokenId)
-      .single()
+    if (new Date(digitalId.validUntil) < new Date()) {
+      return NextResponse.json({ valid: false, reason: "Digital ID has expired" })
+    }
 
     return NextResponse.json({
       valid: true,
       digitalId: {
         tokenId,
-        validUntil: new Date(blockchainData.validUntil * 1000),
-        tourist: digitalId?.profiles,
+        validUntil: digitalId.validUntil,
+        tourist: {
+          name: digitalId.user?.name || null,
+          full_name: digitalId.user?.name || null,
+          email: digitalId.user?.email || null,
+          phone: digitalId.user?.phone || null,
+        },
         emergencyContact: {
-          name: digitalId?.emergency_contact_name,
-          phone: digitalId?.emergency_contact_phone,
+          name: digitalId.emergencyContactName || null,
+          phone: digitalId.emergencyContactPhone || null,
         },
         tripPeriod: {
-          start: digitalId?.trip_start_date,
-          end: digitalId?.trip_end_date,
+          start: digitalId.tripStartDate || null,
+          end: digitalId.tripEndDate || null,
         },
       },
     })
   } catch (error) {
     console.error("Digital ID verification error:", error)
     return NextResponse.json(
-      {
-        valid: false,
-        reason: "Verification failed",
-      },
-      { status: 500 },
+      { valid: false, reason: "Verification failed" },
+      { status: 500 }
     )
   }
 }

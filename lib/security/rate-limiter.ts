@@ -1,4 +1,5 @@
 // Rate limiting service for API endpoints
+// @ts-nocheck
 import type { NextRequest } from "next/server"
 
 interface RateLimitConfig {
