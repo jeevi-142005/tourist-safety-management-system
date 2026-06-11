@@ -1,39 +1,32 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/db-client/server"
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const dbClient = await createServerClient()
+
 
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await dbClient.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Get active tourists count
-    const { count: activeTourists } = await supabase
+    const { count: activeTourists } = await dbClient
       .from("profiles")
       .select("*", { count: "exact" })
       .eq("role", "tourist")
 
     // Get active alerts count
-    const { count: activeAlerts } = await supabase
+    const { count: activeAlerts } = await dbClient
       .from("user_alerts")
       .select("*", { count: "exact" })
       .eq("is_read", false)
 
     // Get critical alerts count
-    const { count: criticalAlerts } = await supabase
+    const { count: criticalAlerts } = await dbClient
       .from("user_alerts")
       .select("*", { count: "exact" })
       .eq("severity", "critical")
@@ -41,7 +34,7 @@ export async function GET(request: NextRequest) {
 
     // Get resolved alerts today
     const today = new Date().toISOString().split("T")[0]
-    const { count: resolvedToday } = await supabase
+    const { count: resolvedToday } = await dbClient
       .from("user_alerts")
       .select("*", { count: "exact" })
       .eq("is_read", true)
@@ -54,14 +47,15 @@ export async function GET(request: NextRequest) {
     const avgResponseTime = 1.8
 
     // Get geo zones count
-    const { count: geoZones } = await supabase.from("geo_zones").select("*", { count: "exact" }).eq("is_active", true)
+    const { count: geoZones } = await dbClient.from("geo_zones").select("*", { count: "exact" }).eq("is_active", true)
 
     // Get recent blockchain transactions
-    const { count: blockchainTransactions } = await supabase
+    const { count: blockchainTransactions } = await dbClient
       .from("blockchain_transactions")
       .select("*", { count: "exact" })
       .eq("status", "confirmed")
       .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+
 
     return NextResponse.json({
       activeTourists: activeTourists || 0,

@@ -1,6 +1,5 @@
 // Security audit logging service
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { db } from "@/lib/db"
 import { encryptionService } from "@/lib/crypto/encryption"
 
 export interface AuditLogEntry {
@@ -17,30 +16,19 @@ export interface AuditLogEntry {
 class AuditLogger {
   async log(entry: AuditLogEntry): Promise<void> {
     try {
-      const cookieStore = cookies()
-      const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        {
-          cookies: {
-            get(name: string) {
-              return cookieStore.get(name)?.value
-            },
-          },
-        },
-      )
-
-      // Create audit log entry
-      await supabase.from("security_audit_logs").insert({
-        user_id: entry.userId,
-        action: entry.action,
-        resource: entry.resource,
-        ip_address: entry.ipAddress,
-        user_agent: entry.userAgent,
-        success: entry.success,
-        details: entry.details ? await encryptionService.encrypt(JSON.stringify(entry.details)) : null,
-        risk_level: entry.riskLevel,
-        timestamp: new Date().toISOString(),
+      // Create audit log entry using Prisma
+      await db.securityAuditLog.create({
+        data: {
+          userId: entry.userId || null,
+          action: entry.action,
+          resource: entry.resource,
+          ipAddress: entry.ipAddress || null,
+          userAgent: entry.userAgent || null,
+          success: entry.success,
+          details: entry.details ? await encryptionService.encrypt(JSON.stringify(entry.details)) : null,
+          riskLevel: entry.riskLevel,
+          timestamp: new Date(),
+        }
       })
 
       // If high or critical risk, create security alert
@@ -55,31 +43,20 @@ class AuditLogger {
 
   private async createSecurityAlert(entry: AuditLogEntry): Promise<void> {
     try {
-      const cookieStore = cookies()
-      const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        {
-          cookies: {
-            get(name: string) {
-              return cookieStore.get(name)?.value
-            },
+      await db.securityAlert.create({
+        data: {
+          alertType: "security_breach",
+          severity: entry.riskLevel,
+          description: `Security event: ${entry.action} on ${entry.resource}`,
+          userId: entry.userId || null,
+          ipAddress: entry.ipAddress || null,
+          details: {
+            action: entry.action,
+            resource: entry.resource,
+            success: entry.success,
+            timestamp: new Date().toISOString(),
           },
-        },
-      )
-
-      await supabase.from("security_alerts").insert({
-        alert_type: "security_breach",
-        severity: entry.riskLevel,
-        description: `Security event: ${entry.action} on ${entry.resource}`,
-        user_id: entry.userId,
-        ip_address: entry.ipAddress,
-        details: {
-          action: entry.action,
-          resource: entry.resource,
-          success: entry.success,
-          timestamp: new Date().toISOString(),
-        },
+        }
       })
     } catch (error) {
       console.error("Security alert creation failed:", error)

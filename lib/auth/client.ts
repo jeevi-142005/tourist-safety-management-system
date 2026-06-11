@@ -7,13 +7,13 @@ interface AuthResponse {
   error?: string
 }
 
-class SimpleSupabaseClient {
+class SimpleDbClient {
   private baseUrl: string
   private apiKey: string
 
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    this.apiKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    this.baseUrl = process.env.NEXT_PUBLIC_DATABASE_URL!
+    this.apiKey = process.env.NEXT_PUBLIC_DATABASE_ANON_KEY!
   }
 
   async signUp(email: string, password: string, metadata?: any): Promise<AuthResponse> {
@@ -135,4 +135,4 @@ class SimpleSupabaseClient {
   }
 }
 
-export const supabaseClient = new SimpleSupabaseClient()
+export const dbClient = new SimpleDbClient()

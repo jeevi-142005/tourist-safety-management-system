@@ -21,6 +21,7 @@ import {
   WifiOff,
   Satellite,
   Bell,
+  Navigation,
 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useAlerts } from "@/hooks/use-alerts"
@@ -31,7 +32,7 @@ import { useAIAutomation } from "@/hooks/use-ai-automation"
 import { NotificationSystem } from "./notification-system"
 import { AIChatAssistant } from "./ai-chat-assistant"
 import { AuthorityHeatmap } from "./authority-heatmap"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/db-client/client"
 
 interface Alert {
   id: string
@@ -237,10 +238,10 @@ useEffect(() => {
     if (offlineAlertQueue.length === 0) return
 
     try {
-      const supabase = createClient()
-      if (!supabase) return
+      const dbClient = createClient()
+      if (!Database) return
 
-      const { error } = await supabase
+      const { error } = await Database
         .from('emergency_alerts')
         .insert(offlineAlertQueue.map(alert => ({
           user_id: alert.id,
@@ -286,10 +287,10 @@ useEffect(() => {
     
     try {
       setIsPolling(true)
-      const supabase = createClient()
-      if (!supabase) return
+      const dbClient = createClient()
+      if (!Database) return
 
-      const { data: alertsData, error } = await supabase
+      const { data: alertsData, error } = await Database
         .from('emergency_alerts')
         .select('*')
         .neq('type', 'admin_notification')
@@ -325,13 +326,13 @@ useEffect(() => {
 
   const handleSendAlert = async (tourist: Tourist) => {
     try {
-      const supabase = createClient()
-      if (!supabase) {
+      const dbClient = createClient()
+      if (!Database) {
         alert('Database not available')
         return
       }
 
-      const { error } = await supabase.from('emergency_alerts').insert({
+      const { error } = await dbClient.from('emergency_alerts').insert({
         user_id: tourist.id,
         type: 'admin_notification',
         message: `Alert sent to ${tourist.name} by admin`,
@@ -360,10 +361,10 @@ useEffect(() => {
         return
       }
 
-      const supabase = createClient()
-      if (!supabase) return
+      const dbClient = createClient()
+      if (!Database) return
 
-      const { error } = await supabase
+      const { error } = await Database
         .from('emergency_alerts')
         .update({ 
           status: 'resolved',
@@ -384,9 +385,9 @@ useEffect(() => {
   const fetchDashboardStats = useCallback(async () => {
     try {
       setIsLoadingStats(true)
-      const supabase = createClient()
+      const dbClient = createClient()
       
-      if (!supabase) {
+      if (!Database) {
         setDashboardStats({
           activeTourists: 1247,
           safeZones: 8,
@@ -396,12 +397,12 @@ useEffect(() => {
         return
       }
 
-      const { count: touristCount } = await supabase
+      const { count: touristCount } = await Database
         .from('tourist_profiles')
         .select('*', { count: 'exact', head: true })
         .eq('is_active', true)
       
-      const { data: resolvedAlertsData } = await supabase
+      const { data: resolvedAlertsData } = await Database
         .from('emergency_alerts')
         .select('created_at, resolved_at')
         .eq('status', 'resolved')
@@ -440,10 +441,10 @@ useEffect(() => {
 
   const fetchRecentActivity = useCallback(async () => {
     try {
-      const supabase = createClient()
-      if (!supabase) return
+      const dbClient = createClient()
+      if (!Database) return
       
-      const { data: recentAlerts } = await supabase
+      const { data: recentAlerts } = await Database
         .from('emergency_alerts')
         .select('*')
         .order('created_at', { ascending: false })
@@ -465,10 +466,10 @@ useEffect(() => {
 
   const fetchTourists = useCallback(async () => {
     try {
-      const supabase = createClient()
-      if (!supabase) return
+      const dbClient = createClient()
+      if (!Database) return
 
-      const { data: touristsData, error } = await supabase
+      const { data: touristsData, error } = await Database
         .from('tourist_profiles')
         .select('*')
         .order('created_at', { ascending: false })
@@ -535,13 +536,93 @@ useEffect(() => {
   const allResolvedAlerts = databaseAlerts.filter(alert => alert.status === 'resolved')
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">{t("admin.title")}</h1>
-            <p className="text-gray-600">{t("admin.subtitle")}</p>
+    <div className="flex h-screen bg-[#f8fafc] text-gray-800 overflow-hidden font-sans">
+      {/* LEFT SIDEBAR */}
+      <aside className="w-64 bg-[#0a0f1d] text-gray-400 flex flex-col justify-between p-4 border-r border-gray-800 shrink-0">
+        <div className="space-y-6">
+          {/* Logo / Header */}
+          <div className="flex items-center space-x-3 px-2 py-2">
+            <div className="p-2 bg-blue-600 rounded-lg text-white">
+              <Shield className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="text-white font-bold text-sm leading-tight">Admin Portal</h2>
+              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Management System</span>
+            </div>
           </div>
+
+          {/* Sidebar Menu items */}
+          <nav className="space-y-1">
+            {[
+              { id: "overview", label: t("tabs.overview") || "Overview", icon: <Navigation className="h-4 w-4" /> },
+              { id: "alerts", label: t("tabs.alerts") || "Alerts", icon: <Bell className="h-4 w-4" />, badge: allActiveAlerts.length },
+              { id: "tourists", label: t("tabs.tourists") || "Tourists", icon: <Users className="h-4 w-4" /> },
+              { id: "ai-automation", label: t("tabs.ai_automation") || "AI Automation", icon: <Brain className="h-4 w-4" /> },
+              { id: "analytics", label: t("tabs.analytics") || "Analytics", icon: <Activity className="h-4 w-4" /> },
+            ].map((item) => {
+              const isActive = activeTab === item.id
+
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    isActive 
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                      : "hover:bg-gray-800/60 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </div>
+                  {item.badge ? (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      isActive ? "bg-white text-blue-600" : "bg-red-500 text-white"
+                    }`}>
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </nav>
+        </div>
+
+        {/* Profile Badge */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-2 rounded-lg bg-gray-900/50 border border-gray-850">
+            <div className="flex items-center space-x-3">
+              <div className="h-9 w-9 bg-blue-500/10 border border-blue-500/30 rounded-full flex items-center justify-center font-bold text-blue-450 text-sm">
+                {user?.email ? user.email.substring(0, 2).toUpperCase() : "AD"}
+              </div>
+              <div className="leading-tight">
+                <div className="text-xs font-semibold text-white truncate max-w-[110px]">{user?.email?.split('@')[0] || "Admin User"}</div>
+                <span className="text-[9px] text-emerald-450 font-medium">System Administrator</span>
+              </div>
+            </div>
+            <button 
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="text-gray-500 hover:text-red-400 p-1 rounded-md hover:bg-gray-800 transition-colors"
+              title={t("header.logout") || "Logout"}
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#f8fafc]">
+        
+        {/* HEADER */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">{t("admin.title") || "Admin Dashboard"}</h1>
+            <p className="text-xs text-gray-500 mt-0.5">{t("admin.subtitle") || "Tourist Safety Management System"}</p>
+          </div>
+
           <div className="flex items-center space-x-4">
             {offlineAlertsReceived > 0 && (
               <Badge variant="destructive" className="flex items-center space-x-1">
@@ -553,7 +634,7 @@ useEffect(() => {
             <select 
               value={language} 
               onChange={(e) => setLanguage(e.target.value as any)}
-              className="px-3 py-1 border rounded text-sm bg-white cursor-pointer"
+              className="px-3 py-1 border border-gray-200 rounded-md text-sm bg-gray-50 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="en">🇺🇸 English</option>
               <option value="ml">ML Malayalam</option>
@@ -563,46 +644,11 @@ useEffect(() => {
               <option value="de">🇩🇪 Deutsch</option>
               <option value="zh">🇨🇳 中文</option>
             </select>
-            <Badge variant="outline" className="text-blue-700 border-blue-300">
-              {user?.email?.split('@')[0]} - Admin
-            </Badge>
-            <Button
-              variant="outline"
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              className="text-muted-foreground hover:text-foreground hover:bg-destructive/10 hover:border-destructive/50 transition-all duration-200 bg-transparent"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              {t("header.logout")}
-            </Button>
           </div>
-        </div>
+        </header>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="overview">{t("tabs.overview")}</TabsTrigger>
-            <TabsTrigger value="alerts" className="relative">
-              <Bell className="h-4 w-4 mr-2" />
-              {t("tabs.alerts")}
-              {allActiveAlerts.length > 0 && (
-                <Badge className="ml-2 bg-red-500 text-white text-xs px-1 py-0 min-w-[16px] h-4">
-                  {allActiveAlerts.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="tourists">
-              <Users className="h-4 w-4 mr-2" />
-              {t("tabs.tourists")}
-            </TabsTrigger>
-            <TabsTrigger value="ai-automation">
-              <Brain className="h-4 w-4 mr-2" />
-              {t("tabs.ai_automation")}
-            </TabsTrigger>
-            <TabsTrigger value="analytics">
-              <Shield className="h-4 w-4 mr-2" />
-              {t("tabs.analytics")}
-            </TabsTrigger>
-          </TabsList>
+        <div className="p-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
 
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1077,6 +1123,7 @@ useEffect(() => {
           </TabsContent>
         </Tabs>
       </div>
+      </main>
 
       {showTouristDetails && selectedTourist && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

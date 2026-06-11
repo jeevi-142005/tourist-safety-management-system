@@ -1,31 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { db } from "@/lib/db"
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "mock-key")
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "https://mock.supabase.co"
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "mock-key"
-
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const currentUser = session.user as any
     const formData = await request.formData()
     const audioFile = formData.get("audio") as File
     const language = (formData.get("language") as string) || "en"
@@ -35,12 +23,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No audio file provided" }, { status: 400 })
     }
 
-    // Convert audio to text using Web Speech API or external service
-    // For demo purposes, we'll simulate speech-to-text
+    // Convert audio to text using Web Speech API or external service (simulated)
     const transcribedText = await transcribeAudio(audioFile, language)
 
     // Analyze emergency content with AI
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
     const prompt = `
     Analyze the following emergency voice message and extract key information:
@@ -81,15 +68,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create emergency alert
+    // Create emergency alert in database (mapped to AdminNotification model)
     const locationData = location ? JSON.parse(location) : null
-    const { data: alert, error: alertError } = await supabase
-      .from("alerts")
-      .insert({
-        user_id: user.id,
-        alert_type: "panic",
+    
+    const alert = await db.adminNotification.create({
+      data: {
+        userId: currentUser.id,
+        type: "panic",
         severity: analysis.severity,
-        location: locationData ? `POINT(${locationData.lng} ${locationData.lat})` : null,
+        title: "Emergency Panic Alert (Voice)",
         message: analysis.summary,
         metadata: {
           emergency_type: analysis.emergencyType,
@@ -97,18 +84,13 @@ export async function POST(request: NextRequest) {
           language: language,
           ai_analysis: analysis,
           alert_method: "voice",
+          location: locationData,
         },
-      })
-      .select()
-      .single()
-
-    if (alertError) {
-      console.error("Alert creation error:", alertError)
-      return NextResponse.json({ error: "Failed to create alert" }, { status: 500 })
-    }
+      }
+    })
 
     // Send notifications to emergency contacts and authorities
-    await sendEmergencyNotifications(user.id, alert, analysis)
+    await sendEmergencyNotifications(currentUser.id, alert, analysis)
 
     return NextResponse.json({
       alertId: alert.id,
@@ -116,17 +98,13 @@ export async function POST(request: NextRequest) {
       analysis: analysis,
       message: "Voice emergency alert processed successfully",
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error("Voice emergency alert error:", error)
-    return NextResponse.json({ error: "Failed to process voice alert" }, { status: 500 })
+    return NextResponse.json({ error: error.message || "Failed to process voice alert" }, { status: 500 })
   }
 }
 
 async function transcribeAudio(audioFile: File, language: string): Promise<string> {
-  // In a real implementation, you would use a speech-to-text service
-  // like Google Speech-to-Text, Azure Speech Services, or AWS Transcribe
-  // For demo purposes, we'll return a simulated transcription
-
   const simulatedTranscriptions: Record<string, string> = {
     en: "Help me, I'm lost in the forest and it's getting dark. I can't find my way back to the main trail.",
     hi: "मुझे मदद चाहिए, मैं जंगल में खो गया हूं और अंधेरा हो रहा है।",
@@ -137,7 +115,5 @@ async function transcribeAudio(audioFile: File, language: string): Promise<strin
 }
 
 async function sendEmergencyNotifications(userId: string, alert: any, analysis: any) {
-  // Implementation for sending SMS, email, and push notifications
-  // This would integrate with services like Twilio, SendGrid, etc.
   console.log("Sending emergency notifications for alert:", alert.id)
 }

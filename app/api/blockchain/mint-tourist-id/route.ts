@@ -1,29 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/db-client/server"
 import { TouristIDBlockchain } from "@/lib/blockchain/tourist-id"
 import { QRCodeGenerator } from "@/lib/qr-code/generator"
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const dbClient = await createServerClient()
 
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await dbClient.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Get user profile
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+    const { data: profile } = await dbClient.from("profiles").select("*").eq("id", user.id).single()
 
     if (!profile) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 })
@@ -59,7 +51,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Store blockchain transaction
-    const { error: transactionError } = await supabase.from("blockchain_transactions").insert({
+    const { error: transactionError } = await dbClient.from("blockchain_transactions").insert({
       user_id: user.id,
       transaction_hash: transactionHash,
       contract_address: process.env.TOURIST_ID_CONTRACT_ADDRESS!,
@@ -74,7 +66,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update user profile with blockchain ID and QR code
-    const { error: updateError } = await supabase
+    const { error: updateError } = await dbClient
       .from("profiles")
       .update({
         blockchain_id: tokenId,

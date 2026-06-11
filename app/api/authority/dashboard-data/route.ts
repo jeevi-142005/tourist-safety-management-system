@@ -1,28 +1,17 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createServerClient } from "@/lib/db-client/server";
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-        },
-      }
-    );
+    const dbClient = await createServerClient();
 
-    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data: { user } } = await dbClient.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const { data: profile } = await dbClient
       .from('profiles')
       .select('role')
       .eq('id', user.id)
@@ -32,50 +21,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    const { data: activeTourists, count: activeTouristsCount } = await supabase
-      .from('digital_tourist_ids')
-      .select('*', { count: 'exact' })
+    const { data: activeTourists, count: activeTouristsCount } = await dbClient
+      .from('tourist_ids')
+      .select('*')
       .eq('is_active', true)
       .gte('trip_end_date', new Date().toISOString().split('T')[0]);
 
-    const { data: activeAlerts } = await supabase
+    const { data: activeAlerts } = await dbClient
       .from('alerts')
-      .select(`
-        *,
-        profiles:user_id (
-          full_name,
-          email,
-          phone
-        )
-      `)
+      .select(`*, profiles:user_id (full_name, email, phone)`)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(50);
 
-    const { data: heatmapData } = await supabase
-      .rpc('get_tourist_heatmap_data', {
-        hours_back: 24
-      });
+    const { data: heatmapData } = await dbClient
+      .rpc('get_tourist_heatmap_data', { hours_back: 24 });
 
-    const { data: riskZones } = await supabase
+    const { data: riskZones } = await dbClient
       .from('geo_zones')
       .select('*')
       .in('zone_type', ['high_risk', 'restricted']);
 
-    const { data: recentEFIRs } = await supabase
+    const { data: recentEFIRs } = await dbClient
       .from('efir_records')
-      .select(`
-        *,
-        alerts:alert_id (
-          alert_type,
-          severity,
-          message
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
       .limit(20);
 
-    const { data: safetyStats } = await supabase
+    const { data: safetyStats } = await dbClient
       .rpc('get_safety_score_statistics');
 
     return NextResponse.json({

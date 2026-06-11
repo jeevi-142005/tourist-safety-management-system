@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from "@/hooks/use-auth"
-
 import {
   Dialog,
   DialogContent,
@@ -20,7 +19,6 @@ import {
 } from "@/components/ui/dialog"
 import { QrCode, Shield, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
-import { createClient } from "@/lib/supabase/client"
 
 interface DigitalIDData {
   id: string
@@ -90,102 +88,35 @@ export function DigitalIDGenerator() {
     setError(null)
 
     try {
-      if (user.id.startsWith('demo-')) {
-        const mockID: DigitalIDData = {
-          id: `demo-id-${Date.now()}`,
-          documentType: formData.documentType as "aadhaar" | "passport" | "other",
+      const res = await fetch("/api/digital-id/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentType: formData.documentType,
           documentNumber: formData.documentNumber,
           fullName: formData.fullName,
           cityName: formData.cityName,
-          validFrom: new Date().toISOString(),
-          validUntil: new Date(formData.validUntil).toISOString(),
-          blockchainHash: await generateBlockchainHash({
-            user_id: user.id,
-            document_type: formData.documentType,
-            document_number: formData.documentNumber,
-            city_name: formData.cityName,
-            timestamp: Date.now()
-          }),
-          isActive: true,
-        }
-        
-        mockID.qrCodeData = generateQRCode(mockID)
-        setDigitalID(mockID)
-        return
-      }
-
-      const supabase = createClient()
-      if (!supabase) {
-        throw new Error("Database connection not available")
-      }
-
-      const { data: { user: supabaseUser }, error: userError } = await supabase.auth.getUser()
-      if (userError || !supabaseUser) {
-        throw new Error("User not authenticated with database")
-      }
-
-      const idData = {
-        user_id: supabaseUser.id,
-        document_type: formData.documentType as "aadhaar" | "passport" | "other",
-        document_number: formData.documentNumber,
-        valid_from: new Date().toISOString(),
-        valid_until: new Date(formData.validUntil).toISOString(),
-        is_active: true,
-      }
-
-      const blockchainHash = await generateBlockchainHash({
-        ...idData,
-        city_name: formData.cityName,
+          validUntil: formData.validUntil,
+        }),
       })
 
-      const { data: insertedID, error: insertError } = await supabase
-        .from("tourist_ids")
-        .insert({
-          ...idData,
-          blockchain_hash: blockchainHash,
-        })
-        .select()
-        .single()
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || "Failed to create digital ID")
 
-      if (insertError) throw insertError
+      const { digitalId: insertedID, blockchainHash } = result
 
       const digitalIDResult: DigitalIDData = {
-        id: insertedID.id,
-        documentType: insertedID.document_type,
-        documentNumber: insertedID.document_number,
+        id: insertedID?.id || `id-${Date.now()}`,
+        documentType: formData.documentType as "aadhaar" | "passport" | "other",
+        documentNumber: formData.documentNumber,
         fullName: formData.fullName,
         cityName: formData.cityName,
-        validFrom: insertedID.valid_from,
-        validUntil: insertedID.valid_until,
-        blockchainHash: insertedID.blockchain_hash,
-        isActive: insertedID.is_active,
+        validFrom: insertedID?.valid_from || new Date().toISOString(),
+        validUntil: insertedID?.valid_until || new Date(formData.validUntil).toISOString(),
+        blockchainHash,
+        isActive: true,
       }
-
-      const qrCodeData = generateQRCode(digitalIDResult)
-      digitalIDResult.qrCodeData = qrCodeData
-
-      await supabase.from("tourist_ids").update({ qr_code_data: qrCodeData }).eq("id", insertedID.id)
-
-      await supabase.from("blockchain_logs").insert({
-        transaction_hash: `0x${blockchainHash.slice(0, 40)}`,
-        transaction_type: "id_creation",
-        user_id: supabaseUser.id,
-        data_hash: blockchainHash,
-        block_number: Math.floor(Math.random() * 1000000),
-        gas_used: Math.floor(Math.random() * 50000) + 21000,
-      })
-
-      await supabase
-        .from('tourist_profiles')
-        .upsert({
-          id: supabaseUser.id,
-          name: formData.fullName,
-          email: supabaseUser.email,
-          blockchain_id: blockchainHash,
-          is_active: true,
-          created_at: new Date().toISOString()
-        })
-
+      digitalIDResult.qrCodeData = generateQRCode(digitalIDResult)
       setDigitalID(digitalIDResult)
     } catch (err) {
       console.error("Error generating digital ID:", err)

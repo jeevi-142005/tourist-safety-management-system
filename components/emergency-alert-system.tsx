@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertTriangle, Mic, MicOff, Send, Shield, Heart, Zap, Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/db-client/client"
 
 interface EmergencyContact {
   id: string
@@ -76,14 +76,14 @@ export function EmergencyAlertSystem() {
 
   const fetchEmergencyContacts = async () => {
     try {
-      const supabase = createClient()
+      const dbClient = createClient()
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await dbClient.auth.getUser()
 
       if (!user) return
 
-      const { data, error } = await supabase
+      const { data, error } = await Database
         .from("emergency_contacts")
         .select("*")
         .eq("user_id", user.id)

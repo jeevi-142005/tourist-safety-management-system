@@ -42,9 +42,9 @@ export function AISafetyAdvisor() {
       if (data.advice) {
         setAdvice(data.advice)
       }
-    } catch (error) {
-      console.error("Error getting safety advice:", error)
-      setError("Failed to get AI advice. Please check your API configuration.")
+    } catch (err: any) {
+      console.error("Error getting safety advice:", err)
+      setError(err.message || "Failed to get AI advice. Please try again.")
     } finally {
       setLoadingAdvice(false)
     }
@@ -72,9 +72,9 @@ export function AISafetyAdvisor() {
       if (data.riskAnalysis) {
         setRiskAnalysis(data.riskAnalysis)
       }
-    } catch (error) {
-      console.error("Error analyzing travel risk:", error)
-      setError("Failed to analyze travel risk. Please check your API configuration.")
+    } catch (err: any) {
+      console.error("Error analyzing travel risk:", err)
+      setError(err.message || "Failed to analyze travel risk. Please try again.")
     } finally {
       setLoadingRisk(false)
     }
@@ -93,12 +93,10 @@ export function AISafetyAdvisor() {
       </div>
 
       {error && (
-        <Alert className="border-red-200 bg-red-50">
+        <Alert className="border-red-200 bg-red-50 mb-6">
           <AlertCircle className="h-4 w-4 text-red-600" />
           <AlertDescription className="text-red-800">
             {error}
-            <br />
-            <span className="text-sm">Make sure you have set up your Google Gemini API key in the .env.local file.</span>
           </AlertDescription>
         </Alert>
       )}

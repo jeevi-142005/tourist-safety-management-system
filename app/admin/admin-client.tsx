@@ -67,6 +67,8 @@ export default function AdminDashboardClient() {
     const [searchTerm, setSearchTerm] = useState("")
     const [statusFilter, setStatusFilter] = useState<string>("all")
 
+    const [activeTab, setActiveTab] = useState("tourists")
+
     useEffect(() => {
         fetchDashboardData()
         // Refresh every 30 seconds
@@ -148,292 +150,339 @@ export default function AdminDashboardClient() {
     }
 
     return (
-        <div className="min-h-screen bg-background">
-            {/* Header */}
-            <header className="bg-card border-b border-border px-6 py-4 shadow-sm">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+        <div className="flex h-screen bg-[#f8fafc] text-gray-800 overflow-hidden font-sans">
+            {/* LEFT SIDEBAR */}
+            <aside className="w-64 bg-[#0a0f1d] text-gray-400 flex flex-col justify-between p-4 border-r border-gray-800 shrink-0">
+                <div className="space-y-6">
+                    {/* Logo / Header */}
+                    <div className="flex items-center space-x-3 px-2 py-2">
+                        <div className="p-2 bg-blue-600 rounded-lg text-white">
+                            <Shield className="h-6 w-6" />
+                        </div>
+                        <div>
+                            <h2 className="text-white font-bold text-sm leading-tight">Admin Portal</h2>
+                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Management System</span>
+                        </div>
+                    </div>
+
+                    {/* Sidebar Menu items */}
+                    <nav className="space-y-1">
+                        {[
+                            { id: "tourists", label: "Tourist Management", icon: <Users className="h-4 w-4" /> },
+                            { id: "alerts", label: "Alert Center", icon: <AlertTriangle className="h-4 w-4" /> },
+                            { id: "analytics", label: "Analytics", icon: <Activity className="h-4 w-4" /> },
+                            { id: "ai-systems", label: "AI Systems", icon: <Brain className="h-4 w-4" /> },
+                        ].map((item) => {
+                            const isActive = activeTab === item.id
+
+                            return (
+                                <button
+                                    key={item.id}
+                                    onClick={() => setActiveTab(item.id)}
+                                    className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                                        isActive 
+                                            ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                                            : "hover:bg-gray-800/60 hover:text-white"
+                                    }`}
+                                >
+                                    {item.icon}
+                                    <span>{item.label}</span>
+                                </button>
+                            )
+                        })}
+                    </nav>
+                </div>
+                
+                {/* Admin Profile */}
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-gray-900/50 border border-gray-850">
                         <div className="flex items-center space-x-3">
-                            <div className="p-2 bg-primary rounded-lg">
-                                <Shield className="h-6 w-6 text-white" />
+                            <div className="h-9 w-9 bg-blue-500/10 border border-blue-500/30 rounded-full flex items-center justify-center font-bold text-blue-450 text-sm">
+                                AD
                             </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-primary">Admin Dashboard</h1>
-                                <p className="text-muted-foreground">Tourist Safety Management System</p>
+                            <div className="leading-tight">
+                                <div className="text-xs font-semibold text-white truncate max-w-[110px]">System Admin</div>
+                                <span className="text-[9px] text-blue-400 font-medium">Administrator</span>
                             </div>
                         </div>
                     </div>
+                </div>
+            </aside>
+
+            {/* MAIN CONTENT AREA */}
+            <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#f8fafc]">
+                {/* HEADER */}
+                <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
+                    <div>
+                        <h1 className="text-xl font-bold text-gray-900">Admin Dashboard</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">Real-time monitoring and management.</p>
+                    </div>
+
                     <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2 px-3 py-1 bg-green-50 rounded-full">
-                            <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-                            <span className="text-sm text-green-700 font-medium">System Operational</span>
+                        <div className="flex items-center space-x-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full">
+                            <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs text-emerald-700 font-medium">System Operational</span>
                         </div>
-                        <Button onClick={fetchDashboardData} variant="outline">
-                            <RefreshCw className="h-4 w-4 mr-2" />
+                        <Button onClick={fetchDashboardData} variant="outline" size="sm" className="h-8">
+                            <RefreshCw className="h-3.5 w-3.5 mr-2" />
                             Refresh
                         </Button>
                     </div>
-                </div>
-            </header>
+                </header>
 
-            <div className="p-6">
-                {/* Stats Overview */}
-                {stats && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                        <Card>
-                            <CardContent className="p-6">
-                                <div className="flex items-center space-x-2">
-                                    <Users className="h-8 w-8 text-blue-600" />
-                                    <div>
-                                        <p className="text-2xl font-bold text-blue-600">{stats.activeTourists}</p>
-                                        <p className="text-sm text-gray-600">Active Tourists</p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardContent className="p-6">
-                                <div className="flex items-center space-x-2">
-                                    <AlertTriangle className="h-8 w-8 text-orange-600" />
-                                    <div>
-                                        <p className="text-2xl font-bold text-orange-600">{stats.activeAlerts}</p>
-                                        <p className="text-sm text-gray-600">Active Alerts</p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardContent className="p-6">
-                                <div className="flex items-center space-x-2">
-                                    <Shield className="h-8 w-8 text-red-600" />
-                                    <div>
-                                        <p className="text-2xl font-bold text-red-600">{stats.criticalAlerts}</p>
-                                        <p className="text-sm text-gray-600">Critical Alerts</p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardContent className="p-6">
-                                <div className="flex items-center space-x-2">
-                                    <Brain className="h-8 w-8 text-purple-600" />
-                                    <div>
-                                        <p className="text-2xl font-bold text-purple-600">{stats.aiEfficiency}%</p>
-                                        <p className="text-sm text-gray-600">AI Efficiency</p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardContent className="p-6">
-                                <div className="flex items-center space-x-2">
-                                    <Activity className="h-8 w-8 text-green-600" />
-                                    <div>
-                                        <p className="text-2xl font-bold text-green-600">{stats.systemUptime}%</p>
-                                        <p className="text-sm text-gray-600">System Uptime</p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-                )}
-
-                {/* Main Dashboard */}
-                <Tabs defaultValue="tourists" className="space-y-4">
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="tourists">Tourist Management</TabsTrigger>
-                        <TabsTrigger value="alerts">Alert Center</TabsTrigger>
-                        <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                        <TabsTrigger value="ai-systems">AI Systems</TabsTrigger>
-                    </TabsList>
-
-                    {/* Tourist Management Tab */}
-                    <TabsContent value="tourists" className="space-y-4">
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <CardTitle>Tourist Management</CardTitle>
-                                        <CardDescription>Real-time monitoring of all registered tourists</CardDescription>
-                                    </div>
+                <div className="p-6">
+                    {/* Stats Overview */}
+                    {stats && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                            <Card className="bg-white border-gray-200/80 shadow-sm">
+                                <CardContent className="p-6">
                                     <div className="flex items-center space-x-2">
-                                        <div className="relative">
-                                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                                            <Input
-                                                placeholder="Search tourists..."
-                                                value={searchTerm}
-                                                onChange={(e) => setSearchTerm(e.target.value)}
-                                                className="pl-10 w-64"
-                                            />
+                                        <Users className="h-8 w-8 text-blue-600" />
+                                        <div>
+                                            <p className="text-2xl font-bold text-blue-600">{stats.activeTourists}</p>
+                                            <p className="text-sm text-gray-600">Active Tourists</p>
                                         </div>
-                                        <select
-                                            value={statusFilter}
-                                            onChange={(e) => setStatusFilter(e.target.value)}
-                                            className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                        >
-                                            <option value="all">All Status</option>
-                                            <option value="safe">Safe</option>
-                                            <option value="alert">Alert</option>
-                                            <option value="emergency">Emergency</option>
-                                        </select>
                                     </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    {filteredTourists.length === 0 ? (
-                                        <p className="text-center text-gray-500 py-8">No tourists found</p>
-                                    ) : (
-                                        filteredTourists.map((tourist) => (
-                                            <div key={tourist.id} className="border rounded-lg p-4 space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                                                            <Users className="h-6 w-6 text-blue-600" />
+                                </CardContent>
+                            </Card>
+
+                            <Card className="bg-white border-gray-200/80 shadow-sm">
+                                <CardContent className="p-6">
+                                    <div className="flex items-center space-x-2">
+                                        <AlertTriangle className="h-8 w-8 text-orange-600" />
+                                        <div>
+                                            <p className="text-2xl font-bold text-orange-600">{stats.activeAlerts}</p>
+                                            <p className="text-sm text-gray-600">Active Alerts</p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="bg-white border-gray-200/80 shadow-sm">
+                                <CardContent className="p-6">
+                                    <div className="flex items-center space-x-2">
+                                        <Shield className="h-8 w-8 text-red-600" />
+                                        <div>
+                                            <p className="text-2xl font-bold text-red-600">{stats.criticalAlerts}</p>
+                                            <p className="text-sm text-gray-600">Critical Alerts</p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="bg-white border-gray-200/80 shadow-sm">
+                                <CardContent className="p-6">
+                                    <div className="flex items-center space-x-2">
+                                        <Brain className="h-8 w-8 text-purple-600" />
+                                        <div>
+                                            <p className="text-2xl font-bold text-purple-600">{stats.aiEfficiency}%</p>
+                                            <p className="text-sm text-gray-600">AI Efficiency</p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="bg-white border-gray-200/80 shadow-sm">
+                                <CardContent className="p-6">
+                                    <div className="flex items-center space-x-2">
+                                        <Activity className="h-8 w-8 text-green-600" />
+                                        <div>
+                                            <p className="text-2xl font-bold text-green-600">{stats.systemUptime}%</p>
+                                            <p className="text-sm text-gray-600">System Uptime</p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
+
+                    {/* Main Dashboard */}
+                    <Tabs value={activeTab} className="space-y-4">
+                        {/* Tourist Management Tab */}
+                        <TabsContent value="tourists" className="space-y-4">
+                            <Card className="bg-white border-gray-200/80 shadow-sm">
+                                <CardHeader>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <CardTitle>Tourist Management</CardTitle>
+                                            <CardDescription>Real-time monitoring of all registered tourists</CardDescription>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <div className="relative">
+                                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                                <Input
+                                                    placeholder="Search tourists..."
+                                                    value={searchTerm}
+                                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                                    className="pl-10 w-64"
+                                                />
+                                            </div>
+                                            <select
+                                                value={statusFilter}
+                                                onChange={(e) => setStatusFilter(e.target.value)}
+                                                className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                            >
+                                                <option value="all">All Status</option>
+                                                <option value="safe">Safe</option>
+                                                <option value="alert">Alert</option>
+                                                <option value="emergency">Emergency</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        {filteredTourists.length === 0 ? (
+                                            <p className="text-center text-gray-500 py-8">No tourists found</p>
+                                        ) : (
+                                            filteredTourists.map((tourist) => (
+                                                <div key={tourist.id} className="border rounded-lg p-4 space-y-3 bg-white hover:bg-gray-50 transition-colors">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                                                <Users className="h-6 w-6 text-blue-600" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium text-lg">{tourist.full_name}</p>
+                                                                <div className="flex items-center space-x-4 text-sm text-gray-500">
+                                                                    <div className="flex items-center space-x-1">
+                                                                        <Mail className="h-4 w-4" />
+                                                                        <span>{tourist.email}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center space-x-1">
+                                                                        <Phone className="h-4 w-4" />
+                                                                        <span>{tourist.phone}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <Badge className={getStatusColor(tourist.status)}>{tourist.status.toUpperCase()}</Badge>
+                                                            {tourist.active_alerts_count > 0 && (
+                                                                <Badge variant="destructive">
+                                                                    {tourist.active_alerts_count} Alert{tourist.active_alerts_count > 1 ? "s" : ""}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                                                        <div>
+                                                            <p className="text-gray-500 font-medium">Blockchain ID</p>
+                                                            <div className="flex items-center space-x-2">
+                                                                <QrCode className="h-4 w-4 text-gray-400" />
+                                                                <span className="font-mono text-xs">{tourist.blockchain_id || "Not assigned"}</span>
+                                                            </div>
                                                         </div>
                                                         <div>
-                                                            <p className="font-medium text-lg">{tourist.full_name}</p>
-                                                            <div className="flex items-center space-x-4 text-sm text-gray-500">
-                                                                <div className="flex items-center space-x-1">
-                                                                    <Mail className="h-4 w-4" />
-                                                                    <span>{tourist.email}</span>
+                                                            <p className="text-gray-500 font-medium">Current Location</p>
+                                                            <div className="flex items-center space-x-1">
+                                                                <MapPin className="h-4 w-4 text-gray-400" />
+                                                                <span>
+                                                                    {tourist.current_location
+                                                                        ? `${tourist.current_location.latitude.toFixed(4)}, ${tourist.current_location.longitude.toFixed(4)}`
+                                                                        : "Unknown"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-gray-500 font-medium">Safety Score</p>
+                                                            <div className="flex items-center space-x-2">
+                                                                <div className={`text-lg font-bold ${getRiskLevelColor(tourist.risk_level)}`}>
+                                                                    {tourist.safety_score}/100
                                                                 </div>
-                                                                <div className="flex items-center space-x-1">
-                                                                    <Phone className="h-4 w-4" />
-                                                                    <span>{tourist.phone}</span>
-                                                                </div>
+                                                                <Badge variant="outline" className={getRiskLevelColor(tourist.risk_level)}>
+                                                                    {tourist.risk_level}
+                                                                </Badge>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-gray-500 font-medium">Last Update</p>
+                                                            <div className="flex items-center space-x-1">
+                                                                <Clock className="h-4 w-4 text-gray-400" />
+                                                                <span>
+                                                                    {tourist.current_location
+                                                                        ? new Date(tourist.current_location.timestamp).toLocaleString()
+                                                                        : "Never"}
+                                                                </span>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        <Badge className={getStatusColor(tourist.status)}>{tourist.status.toUpperCase()}</Badge>
-                                                        {tourist.active_alerts_count > 0 && (
-                                                            <Badge variant="destructive">
-                                                                {tourist.active_alerts_count} Alert{tourist.active_alerts_count > 1 ? "s" : ""}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                </div>
 
-                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                                                    <div>
-                                                        <p className="text-gray-500 font-medium">Blockchain ID</p>
-                                                        <div className="flex items-center space-x-2">
-                                                            <QrCode className="h-4 w-4 text-gray-400" />
-                                                            <span className="font-mono text-xs">{tourist.blockchain_id || "Not assigned"}</span>
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-gray-500 font-medium">Current Location</p>
-                                                        <div className="flex items-center space-x-1">
-                                                            <MapPin className="h-4 w-4 text-gray-400" />
-                                                            <span>
-                                                                {tourist.current_location
-                                                                    ? `${tourist.current_location.latitude.toFixed(4)}, ${tourist.current_location.longitude.toFixed(4)}`
-                                                                    : "Unknown"}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-gray-500 font-medium">Safety Score</p>
-                                                        <div className="flex items-center space-x-2">
-                                                            <div className={`text-lg font-bold ${getRiskLevelColor(tourist.risk_level)}`}>
-                                                                {tourist.safety_score}/100
+                                                    {tourist.current_location && (
+                                                        <div className="flex items-center space-x-4 text-sm text-gray-500">
+                                                            <div className="flex items-center space-x-1">
+                                                                <Battery className="h-4 w-4" />
+                                                                <span>Battery: {tourist.current_location.battery_level}%</span>
                                                             </div>
-                                                            <Badge variant="outline" className={getRiskLevelColor(tourist.risk_level)}>
-                                                                {tourist.risk_level}
-                                                            </Badge>
+                                                            <div className="flex items-center space-x-1">
+                                                                <span>Emergency Contact: {tourist.emergency_contact}</span>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-gray-500 font-medium">Last Update</p>
-                                                        <div className="flex items-center space-x-1">
-                                                            <Clock className="h-4 w-4 text-gray-400" />
-                                                            <span>
-                                                                {tourist.current_location
-                                                                    ? new Date(tourist.current_location.timestamp).toLocaleString()
-                                                                    : "Never"}
-                                                            </span>
-                                                        </div>
+                                                    )}
+
+                                                    <div className="flex space-x-2 pt-2">
+                                                        <Button size="sm" variant="outline" className="bg-white">
+                                                            <Eye className="h-4 w-4 mr-1" />
+                                                            Track Live
+                                                        </Button>
+                                                        <Button size="sm" variant="outline" className="bg-white">
+                                                            <MessageSquare className="h-4 w-4 mr-1" />
+                                                            Send Alert
+                                                        </Button>
+                                                        <Button size="sm" variant="outline" className="bg-white">
+                                                            <QrCode className="h-4 w-4 mr-1" />
+                                                            View QR Code
+                                                        </Button>
                                                     </div>
                                                 </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
 
-                                                {tourist.current_location && (
-                                                    <div className="flex items-center space-x-4 text-sm text-gray-500">
-                                                        <div className="flex items-center space-x-1">
-                                                            <Battery className="h-4 w-4" />
-                                                            <span>Battery: {tourist.current_location.battery_level}%</span>
-                                                        </div>
-                                                        <div className="flex items-center space-x-1">
-                                                            <span>Emergency Contact: {tourist.emergency_contact}</span>
-                                                        </div>
-                                                    </div>
-                                                )}
+                        {/* Other tabs would be implemented similarly */}
+                        <TabsContent value="alerts">
+                            <Card className="bg-white border-gray-200/80 shadow-sm">
+                                <CardHeader>
+                                    <CardTitle>Alert Management Center</CardTitle>
+                                    <CardDescription>Monitor and respond to tourist alerts</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-center text-gray-500 py-8">Alert management interface coming soon...</p>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
 
-                                                <div className="flex space-x-2">
-                                                    <Button size="sm" variant="outline">
-                                                        <Eye className="h-4 w-4 mr-1" />
-                                                        Track Live
-                                                    </Button>
-                                                    <Button size="sm" variant="outline">
-                                                        <MessageSquare className="h-4 w-4 mr-1" />
-                                                        Send Alert
-                                                    </Button>
-                                                    <Button size="sm" variant="outline">
-                                                        <QrCode className="h-4 w-4 mr-1" />
-                                                        View QR Code
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
+                        <TabsContent value="analytics">
+                            <Card className="bg-white border-gray-200/80 shadow-sm">
+                                <CardHeader>
+                                    <CardTitle>System Analytics</CardTitle>
+                                    <CardDescription>Performance metrics and insights</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-center text-gray-500 py-8">Analytics dashboard coming soon...</p>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
 
-                    {/* Other tabs would be implemented similarly */}
-                    <TabsContent value="alerts">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Alert Management Center</CardTitle>
-                                <CardDescription>Monitor and respond to tourist alerts</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-center text-gray-500 py-8">Alert management interface coming soon...</p>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="analytics">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>System Analytics</CardTitle>
-                                <CardDescription>Performance metrics and insights</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-center text-gray-500 py-8">Analytics dashboard coming soon...</p>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="ai-systems">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>AI Systems Control</CardTitle>
-                                <CardDescription>Monitor and control AI-powered features</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-center text-gray-500 py-8">AI systems control panel coming soon...</p>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                </Tabs>
-            </div>
+                        <TabsContent value="ai-systems">
+                            <Card className="bg-white border-gray-200/80 shadow-sm">
+                                <CardHeader>
+                                    <CardTitle>AI Systems Control</CardTitle>
+                                    <CardDescription>Monitor and control AI-powered features</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-center text-gray-500 py-8">AI systems control panel coming soon...</p>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                    </Tabs>
+                </div>
+            </main>
         </div>
     )
 }
+

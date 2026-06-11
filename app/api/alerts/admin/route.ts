@@ -1,34 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/db-client/server"
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const dbClient = await createServerClient()
 
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await dbClient.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Check if user is admin
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+    const { data: profile } = await dbClient.from("profiles").select("role").eq("id", user.id).single()
 
     if (profile?.role !== "admin" && profile?.role !== "authority") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     // Get admin notifications
-    const { data: notifications, error: notificationsError } = await supabase
+    const { data: notifications, error: notificationsError } = await dbClient
       .from("admin_notifications")
       .select(`
         *,
@@ -46,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get recent user alerts for context
-    const { data: userAlerts, error: alertsError } = await supabase
+    const { data: userAlerts, error: alertsError } = await dbClient
       .from("user_alerts")
       .select(`
         *,
@@ -65,7 +57,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get anomaly patterns for analysis
-    const { data: anomalies, error: anomaliesError } = await supabase
+    const { data: anomalies, error: anomaliesError } = await dbClient
       .from("anomaly_patterns")
       .select(`
         *,
@@ -102,24 +94,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const dbClient = await createServerClient()
 
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await dbClient.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Check if user is admin
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+    const { data: profile } = await dbClient.from("profiles").select("role").eq("id", user.id).single()
 
     if (profile?.role !== "admin" && profile?.role !== "authority") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
@@ -130,21 +115,21 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case "mark_notification_read":
-        await supabase
+        await dbClient
           .from("admin_notifications")
           .update({ is_read: true, read_at: new Date().toISOString() })
           .eq("id", notification_id)
         break
 
       case "acknowledge_alert":
-        await supabase
+        await dbClient
           .from("user_alerts")
           .update({ is_acknowledged: true, acknowledged_at: new Date().toISOString() })
           .eq("id", alert_id)
         break
 
       case "resolve_anomaly":
-        await supabase
+        await dbClient
           .from("anomaly_patterns")
           .update({ resolved: true, resolved_at: new Date().toISOString() })
           .eq("id", anomaly_id)

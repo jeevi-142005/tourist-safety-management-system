@@ -1,44 +1,37 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/db-client/server"
 import { GoogleGenerativeAI } from "@google/generative-ai"
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "mock-key")
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const dbClient = await createServerClient()
 
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await dbClient.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+
     const [locationHistory, alertHistory, geoZones, safetyScores, anomalies] = await Promise.all([
-      supabase
+      dbClient
         .from("location_tracks")
         .select("*")
         .eq("user_id", user.id)
         .order("timestamp", { ascending: false })
         .limit(50),
-      supabase.from("alerts").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(25),
-      supabase.from("geo_zones").select("*"),
-      supabase
+      dbClient.from("alerts").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(25),
+      dbClient.from("geo_zones").select("*"),
+      dbClient
         .from("safety_scores")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(10),
-      supabase
+      dbClient
         .from("anomaly_patterns")
         .select("*")
         .eq("user_id", user.id)
@@ -46,7 +39,7 @@ export async function POST(request: NextRequest) {
         .limit(20),
     ])
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
     const comprehensivePrompt = `
     You are an advanced AI safety analyst. Perform a comprehensive safety analysis for a tourist based on the following data:
@@ -122,7 +115,7 @@ export async function POST(request: NextRequest) {
       analysis = generateFallbackAnalysis(locationHistory.data, alertHistory.data, anomalies.data)
     }
 
-    const { error: storeError } = await supabase.from("ai_analyses").insert({
+    const { error: storeError } = await dbClient.from("ai_analyses").insert({
       user_id: user.id,
       analysis_type: "comprehensive_gemini",
       results: analysis,

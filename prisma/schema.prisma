@@ -1,0 +1,325 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// NextAuth.js Models (linked with our User Profile model)
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Unified User & Profile Model
+model User {
+  id               String        @id @default(uuid())
+  name             String?
+  email            String        @unique
+  passwordHash     String        // BCrypt hashed password
+  phone            String?
+  emergencyContact String?
+  emergencyPhone   String?
+  role             String        @default("tourist") // "tourist", "admin", "authority"
+  blockchainId     String?       @unique
+  qrCodeData       String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+  locationTracks   LocationTrack[]
+  travelPlans      TravelPlan[]
+  safetyScores     SafetyScore[]
+  anomalyPatterns  AnomalyPattern[]
+  deviceMetrics    DeviceMetrics[]
+  transactions     BlockchainTransaction[]
+  notifications    AdminNotification[]
+  touristIds       TouristId[]
+  emergencyAlerts  EmergencyAlert[]
+  aiAnalyses       AiAnalysis[]
+}
+
+model Country {
+  id          String        @id @default(uuid())
+  name        String        @unique
+  code        String        @unique
+  safetyLevel Int           @default(3)
+  createdAt   DateTime      @default(now())
+  geoZones    GeoZone[]
+  travelPlans TravelPlan[]
+}
+
+model GeoZone {
+  id          String        @id @default(uuid())
+  name        String
+  zoneType    String        // "safe", "caution", "high_risk", "restricted"
+  countryId   String
+  country     Country       @relation(fields: [countryId], references: [id])
+  coordinates Json          // GeoJSON polygon coordinates
+  centerLat   Float
+  centerLng   Float
+  radius      Int?
+  description String?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  locationTracks LocationTrack[]
+}
+
+model LocationTrack {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  latitude     Float
+  longitude    Float
+  accuracy     Float?
+  altitude     Float?
+  speed        Float?
+  heading      Float?
+  timestamp    DateTime  @default(now())
+  batteryLevel Int?
+  isEmergency  Boolean   @default(false)
+  zoneId       String?
+  zone         GeoZone?  @relation(fields: [zoneId], references: [id])
+}
+
+model TravelPlan {
+  id                     String    @id @default(uuid())
+  userId                 String
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title                  String
+  destinationCountryId   String
+  destinationCountry     Country   @relation(fields: [destinationCountryId], references: [id])
+  startDate              DateTime
+  endDate                DateTime
+  plannedRoute           Json?
+  accommodationDetails   String?
+  emergencyPlan          String?
+  isActive               Boolean   @default(true)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+}
+
+model SafetyScore {
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score            Int
+  riskLevel        String    // "low", "medium", "high", "critical"
+  factors          Json
+  recommendations  Json      // Array of strings in JSON
+  analysisSummary  String?
+  createdAt        DateTime  @default(now())
+}
+
+model AnomalyPattern {
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type             String    // "route_deviation", "unusual_location", etc.
+  severity         String    // "low", "medium", etc.
+  description      String
+  locationLat      Float
+  locationLng      Float
+  confidence       Float
+  riskFactors      Json      // Array of strings in JSON
+  recommendations  Json      // Array of strings in JSON
+  resolved         Boolean   @default(false)
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+}
+
+model DeviceMetrics {
+  id                 String   @id @default(uuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  batteryLevel       Int?
+  connectionStrength Int?
+  locationAccuracy   Int?
+  ambientLight       Float?
+  noiseLevel         Float?
+  movementPattern    String?
+  locationLat        Float?
+  locationLng        Float?
+  createdAt          DateTime @default(now())
+}
+
+model BlockchainTransaction {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactionHash   String    @unique
+  contractAddress   String
+  tokenId           String
+  blockchainNetwork String    @default("polygon")
+  status            String    @default("pending") // "pending", "confirmed", "failed"
+  gasUsed           BigInt?
+  transactionFee    Float?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  confirmedAt       DateTime?
+}
+
+model AdminNotification {
+  id         String   @id @default(uuid())
+  type       String   // "emergency_alert", "anomaly_detected", etc.
+  title      String
+  message    String
+  severity   String   // "info", "warning", "error", "critical"
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  metadata   Json?
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  readAt     DateTime?
+}
+
+model SecurityAuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  resource  String
+  ipAddress String?
+  userAgent String?
+  success   Boolean
+  details   String?  // encrypted text
+  riskLevel String
+  timestamp DateTime @default(now())
+}
+
+model SecurityAlert {
+  id          String   @id @default(uuid())
+  alertType   String
+  severity    String
+  description String
+  userId      String?
+  ipAddress   String?
+  details     Json?
+  createdAt   DateTime @default(now())
+}
+
+model DataAccessLog {
+  id              String   @id @default(uuid())
+  userId          String
+  accessedBy      String
+  dataType        String
+  accessReason    String
+  legalBasis      String
+  retentionPeriod String   @default("7 days")
+  createdAt       DateTime @default(now())
+}
+
+model IotDeviceAlert {
+  id             String   @id @default(uuid())
+  deviceId       String
+  deviceName     String
+  alertType      String
+  message        String
+  locationLat    Float
+  locationLng    Float
+  batteryLevel   Int
+  signalStrength Int
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+}
+
+model EmergencyAlert {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userName        String   @map("user_name")
+  type            String
+  message         String
+  severity        String
+  locationLat     Float?   @map("location_lat")
+  locationLng     Float?   @map("location_lng")
+  status          String   @default("active")
+  deviceInfo      Json?    @map("device_info")
+  offlineStoredAt DateTime? @map("offline_stored_at")
+  syncedAt        DateTime @default(now()) @map("synced_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+}
+
+model TouristId {
+  id                    String   @id @default(uuid())
+  userId                String   @map("user_id")
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentType          String   @map("document_type")
+  documentNumber        String   @map("document_number")
+  validFrom             DateTime @default(now()) @map("valid_from")
+  validUntil            DateTime @map("valid_until")
+  blockchainHash        String   @map("blockchain_hash")
+  qrCodeData            String?  @map("qr_code_data")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  aadhaarNumber         String?  @map("aadhaar_number")
+  passportNumber        String?  @map("passport_number")
+  emergencyContactName  String?  @map("emergency_contact_name")
+  emergencyContactPhone String?  @map("emergency_contact_phone")
+  tripStartDate         DateTime? @map("trip_start_date")
+  tripEndDate           DateTime? @map("trip_end_date")
+}
+
+model BlockchainLog {
+  id              String   @id @default(uuid())
+  transactionHash String   @map("transaction_hash")
+  transactionType String   @map("transaction_type")
+  userId          String   @map("user_id")
+  dataHash        String   @map("data_hash")
+  blockNumber     Int?     @map("block_number")
+  gasUsed         Int?     @map("gas_used")
+  createdAt       DateTime @default(now()) @map("created_at")
+}
+
+model EfirRecord {
+  id                 String   @id @default(uuid())
+  alertId            String   @map("alert_id")
+  firNumber          String   @map("fir_number")
+  incidentDetails    String   @map("incident_details")
+  assignedOfficer    String?  @map("assigned_officer")
+  complainantDetails Json     @map("complainant_details")
+  createdAt          DateTime @default(now()) @map("created_at")
+}
+
+model AiAnalysis {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analysisType String   @map("analysis_type")
+  results      Json
+  confidence   Float?
+  threatLevel  String?  @map("threat_level")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+}
+
+
+
+
+
+
+

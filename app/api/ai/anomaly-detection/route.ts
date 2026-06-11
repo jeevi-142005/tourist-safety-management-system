@@ -1,26 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/db-client/server"
 import { GoogleGenerativeAI } from "@google/generative-ai"
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "mock-key")
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const dbClient = await createServerClient()
 
     const body = await request.json()
     const { userId, checkType = "all" } = body
 
     // Get recent location data
-    const { data: recentLocations } = await supabase
+    const { data: recentLocations } = await dbClient
       .from("location_tracks")
       .select("*")
       .eq("user_id", userId)
@@ -28,7 +20,7 @@ export async function POST(request: NextRequest) {
       .limit(50)
 
     // Get planned routes
-    const { data: plannedRoutes } = await supabase
+    const { data: plannedRoutes } = await dbClient
       .from("planned_routes")
       .select("*")
       .eq("user_id", userId)
@@ -39,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Analyze with Gemini AI
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
     const prompt = `
     Analyze the following tourist location data for anomalies and safety concerns:
@@ -91,7 +83,7 @@ export async function POST(request: NextRequest) {
     // Create alerts for high-severity anomalies
     for (const anomaly of aiAnalysis.anomalies) {
       if (anomaly.severity === "high" || anomaly.severity === "critical") {
-        await supabase.from("alerts").insert({
+        await dbClient.from("alerts").insert({
           user_id: userId,
           alert_type: "anomaly",
           severity: anomaly.severity,

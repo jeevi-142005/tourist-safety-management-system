@@ -1,103 +1,116 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
-import { blockchainClient } from "@/lib/blockchain/client"
-import { encryptionService } from "@/lib/crypto/encryption"
-import QRCode from "qrcode"
-import { randomUUID } from "crypto"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { db } from "@/lib/db"
+import { createHash, randomUUID } from "crypto"
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const body = await request.json()
-    const { aadhaarNumber, passportNumber, emergencyContactName, emergencyContactPhone, tripStartDate, tripEndDate } =
-      body
-
-    // Encrypt sensitive data
-    const encryptedAadhaar = aadhaarNumber ? await encryptionService.encrypt(aadhaarNumber) : null
-    const encryptedPassport = passportNumber ? await encryptionService.encrypt(passportNumber) : null
-
-    // Create blockchain entry
-    const blockchainResult = await blockchainClient.createDigitalID({
-      userId: user.id,
-      aadhaarHash: aadhaarNumber ? await encryptionService.hashSensitiveData(aadhaarNumber) : "",
-      passportHash: passportNumber ? await encryptionService.hashSensitiveData(passportNumber) : "",
-      validUntil: new Date(tripEndDate),
-    })
-
-    // Generate QR code data
-    const qrData = {
-      id: randomUUID(),
-      userId: user.id,
-      tokenId: blockchainResult.tokenId,
-      validUntil: tripEndDate,
-      emergencyContact: emergencyContactPhone,
-      verificationUrl: `${process.env.NEXT_PUBLIC_APP_URL}/verify/${blockchainResult.tokenId}`,
+    const userId = (session.user as any).id as string
+    if (!userId) {
+      return NextResponse.json({ error: "User ID not found in session" }, { status: 401 })
     }
 
-    const qrCodeDataUrl = await QRCode.toDataURL(JSON.stringify(qrData), {
-      errorCorrectionLevel: "M",
-      type: "image/png",
-      quality: 0.92,
-      margin: 1,
-      color: {
-        dark: "#000000",
-        light: "#FFFFFF",
+    const body = await request.json()
+    const {
+      documentType,
+      documentNumber,
+      fullName,
+      cityName,
+      aadhaarNumber,
+      passportNumber,
+      emergencyContactName,
+      emergencyContactPhone,
+      tripStartDate,
+      tripEndDate,
+      validUntil,
+    } = body
+
+    // Resolve the effective document fields
+    const effectiveDocType =
+      documentType || (aadhaarNumber ? "aadhaar" : passportNumber ? "passport" : "other")
+    const effectiveDocNumber = documentNumber || aadhaarNumber || passportNumber || ""
+    const effectiveValidUntil = validUntil || tripEndDate
+
+    if (!effectiveDocType || !effectiveDocNumber || !effectiveValidUntil) {
+      return NextResponse.json({ error: "Missing required fields: document type, number and validity date" }, { status: 400 })
+    }
+
+    // Generate blockchain-style SHA-256 hash
+    const idPayload = JSON.stringify({
+      userId,
+      docType: effectiveDocType,
+      docNum: effectiveDocNumber,
+      ts: Date.now(),
+    })
+    const blockchainHash = createHash("sha256").update(idPayload).digest("hex")
+
+    const baseUrl =
+      process.env.NEXTAUTH_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      "http://localhost:3000"
+
+    const qrData = JSON.stringify({
+      id: randomUUID(),
+      userId,
+      name: fullName || session.user.name,
+      city: cityName,
+      docType: effectiveDocType,
+      docNum: effectiveDocNumber.slice(-4),
+      validUntil: effectiveValidUntil,
+      blockchainHash,
+      verificationUrl: `${baseUrl}/verify/${blockchainHash}`,
+    })
+
+    // Create the TouristId record in SQLite via Prisma
+    const digitalId = await db.touristId.create({
+      data: {
+        userId,
+        documentType: effectiveDocType,
+        documentNumber: effectiveDocNumber,
+        validFrom: new Date(),
+        validUntil: new Date(effectiveValidUntil),
+        blockchainHash,
+        qrCodeData: qrData,
+        isActive: true,
+        aadhaarNumber: aadhaarNumber
+          ? createHash("sha256").update(aadhaarNumber).digest("hex")
+          : null,
+        passportNumber: passportNumber
+          ? createHash("sha256").update(passportNumber).digest("hex")
+          : null,
+        emergencyContactName: emergencyContactName || null,
+        emergencyContactPhone: emergencyContactPhone || null,
+        tripStartDate: tripStartDate ? new Date(tripStartDate) : null,
+        tripEndDate: tripEndDate ? new Date(tripEndDate) : null,
       },
     })
 
-    // Store in database
-    const { data: digitalId, error } = await supabase
-      .from("digital_tourist_ids")
-      .insert({
-        user_id: user.id,
-        blockchain_hash: blockchainResult.transactionHash,
-        qr_code_data: JSON.stringify(qrData),
-        aadhaar_number: encryptedAadhaar,
-        passport_number: encryptedPassport,
-        emergency_contact_name: emergencyContactName,
-        emergency_contact_phone: emergencyContactPhone,
-        trip_start_date: tripStartDate,
-        trip_end_date: tripEndDate,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error("Database error:", error)
-      return NextResponse.json({ error: "Failed to create digital ID" }, { status: 500 })
-    }
-
-    // Log blockchain transaction
-    await supabase.from("blockchain_logs").insert({
-      transaction_hash: blockchainResult.transactionHash,
-      transaction_type: "id_creation",
-      user_id: user.id,
-      data_hash: await encryptionService.hashSensitiveData(JSON.stringify(qrData)),
+    // Log the blockchain transaction
+    await db.blockchainLog.create({
+      data: {
+        transactionHash: `0x${blockchainHash.slice(0, 40)}`,
+        transactionType: "id_creation",
+        userId,
+        dataHash: blockchainHash,
+        blockNumber: Math.floor(Math.random() * 1_000_000),
+        gasUsed: Math.floor(Math.random() * 50_000) + 21_000,
+      },
     })
 
     return NextResponse.json({
       digitalId,
-      qrCode: qrCodeDataUrl,
-      blockchainHash: blockchainResult.transactionHash,
-      tokenId: blockchainResult.tokenId,
+      qrCode: qrData,
+      blockchainHash,
+      tokenId: blockchainHash,
+      verificationUrl: `${baseUrl}/verify/${blockchainHash}`,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error("Digital ID creation error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

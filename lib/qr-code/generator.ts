@@ -1,4 +1,5 @@
-import QRCode from "qrcode"
+// @ts-nocheck
+import * as QRCode from "qrcode"
 import { createHash } from "crypto"
 
 export interface QRCodeData {

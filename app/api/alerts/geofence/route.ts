@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
+import { createServerClient } from "@/lib/db-client/server"
 import { cookies } from "next/headers"
 import { GoogleGenerativeAI } from "@google/generative-ai"
 
@@ -7,18 +7,11 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const dbClient = await createServerClient()
 
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await dbClient.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -38,7 +31,7 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Processing geofence alert:", { zone_name, event_type, zone_type })
 
     // Get user profile for context
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+    const { data: profile } = await dbClient.from("profiles").select("*").eq("id", user.id).single()
 
     // Determine alert severity based on zone type and event
     const severity = getSeverityLevel(zone_type, event_type)
@@ -50,7 +43,7 @@ export async function POST(request: NextRequest) {
         ? `You have entered ${zone_name}. Please exercise caution and follow safety guidelines.`
         : `You have exited ${zone_name}. Stay alert and maintain safety protocols.`
 
-    const { data: userAlert, error: userAlertError } = await supabase
+    const { data: userAlert, error: userAlertError } = await dbClient
       .from("user_alerts")
       .insert({
         user_id: user.id,
@@ -72,7 +65,7 @@ export async function POST(request: NextRequest) {
     if (zone_type === "high_risk" || zone_type === "restricted") {
       const adminMessage = `Tourist ${profile?.full_name || user.email} has ${event_type === "entry" ? "entered" : "exited"} ${zone_type} zone: ${zone_name}`
 
-      await supabase.from("admin_notifications").insert({
+      await dbClient.from("admin_notifications").insert({
         type: "emergency_alert",
         title: `Geofence Alert: ${zone_type} zone ${event_type}`,
         message: adminMessage,
@@ -97,7 +90,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send real-time notification
-    await supabase.channel("geofence_alerts").send({
+    await dbClient.channel("geofence_alerts").send({
       type: "broadcast",
       event: "geofence_alert",
       payload: {
@@ -157,7 +150,7 @@ async function analyzeGeofenceEvent(
   longitude: number,
 ) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
 
     const prompt = `
     Analyze this geofence security event:
@@ -199,15 +192,9 @@ async function analyzeGeofenceEvent(
     }
 
     // Store AI analysis
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get() {
-          return undefined
-        },
-      },
-    })
+    const dbClient = await createServerClient()
 
-    await supabase.from("anomaly_patterns").insert({
+    await dbClient.from("anomaly_patterns").insert({
       user_id: userId,
       type: "geofence_violation",
       severity: analysis.riskLevel,
@@ -227,24 +214,17 @@ async function analyzeGeofenceEvent(
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    })
+    const dbClient = await createServerClient()
 
     const {
       data: { user },
-    } = await supabase.auth.getUser()
+    } = await dbClient.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Get recent geofence alerts for the user
-    const { data: alerts, error } = await supabase
+    const { data: alerts, error } = await dbClient
       .from("user_alerts")
       .select("*")
       .eq("user_id", user.id)

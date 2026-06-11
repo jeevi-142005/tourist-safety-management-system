@@ -20,7 +20,7 @@ import {
   RefreshCw,
   Loader2,
 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/db-client/client"
 
 interface DashboardStats {
   activeTourists: number
@@ -95,8 +95,8 @@ export function AuthorityDashboard() {
 
   const handleResolveAlert = async (alertId: string) => {
     try {
-      const supabase = createClient()
-      await supabase
+      const dbClient = createClient()
+      await Database
         .from("alerts")
         .update({ status: "resolved", resolved_at: new Date().toISOString() })
         .eq("id", alertId)

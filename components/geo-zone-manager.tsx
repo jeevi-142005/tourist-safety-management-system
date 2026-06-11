@@ -20,7 +20,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { MapPin, Plus, Edit, Trash2, Shield, AlertTriangle, Eye, Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/db-client/client"
 
 interface GeoZone {
   id: string
@@ -52,8 +52,8 @@ export function GeoZoneManager() {
 
   const fetchZones = async () => {
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase.from("geo_zones").select("*").order("created_at", { ascending: false })
+      const dbClient = createClient()
+      const { data, error } = await dbClient.from("geo_zones").select("*").order("created_at", { ascending: false })
 
       if (error) throw error
       setZones(data || [])
@@ -74,10 +74,10 @@ export function GeoZoneManager() {
     }
 
     try {
-      const supabase = createClient()
+      const dbClient = createClient()
       const {
         data: { user },
-      } = await supabase.auth.getUser()
+      } = await dbClient.auth.getUser()
 
       if (!user) {
         setError("User not authenticated")
@@ -103,11 +103,11 @@ export function GeoZoneManager() {
       }
 
       if (editingZone) {
-        const { error } = await supabase.from("geo_zones").update(zoneData).eq("id", editingZone.id)
+        const { error } = await dbClient.from("geo_zones").update(zoneData).eq("id", editingZone.id)
 
         if (error) throw error
       } else {
-        const { error } = await supabase.from("geo_zones").insert(zoneData)
+        const { error } = await dbClient.from("geo_zones").insert(zoneData)
 
         if (error) throw error
       }
@@ -138,8 +138,8 @@ export function GeoZoneManager() {
     if (!confirm("Are you sure you want to delete this zone?")) return
 
     try {
-      const supabase = createClient()
-      const { error } = await supabase.from("geo_zones").delete().eq("id", zoneId)
+      const dbClient = createClient()
+      const { error } = await dbClient.from("geo_zones").delete().eq("id", zoneId)
 
       if (error) throw error
       await fetchZones()
