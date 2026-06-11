@@ -20,14 +20,7 @@ Traveling to unfamiliar places can pose safety risks for tourists. This applicat
 - **Styling:** PostCSS  
 - **Tools:** Node.js, npm / pnpm  
 
-##  Screenshots
 
-<img width="1920" height="1080" alt="Screenshot (3)" src="https://github.com/user-attachments/assets/478b81c8-528b-4882-ae7f-c0d93db228dc" />
-<img width="1920" height="1080" alt="Screenshot (4)" src="https://github.com/user-attachments/assets/b96db356-c1b8-42eb-9071-317af3102888" />
-<img width="1920" height="1080" alt="Screenshot (7)" src="https://github.com/user-attachments/assets/20449dc8-340c-4681-9f28-88a3bffb14ac" />
-<img width="1920" height="1080" alt="Screenshot (42)" src="https://github.com/user-attachments/assets/ce006744-ea2e-49b9-a83b-6d7d0559fa5a" />
-<img width="1920" height="1080" alt="Screenshot (11)" src="https://github.com/user-attachments/assets/ff9ea356-5100-4d80-8380-37acf9df5006" />
-<img width="1920" height="1080" alt="Screenshot (66)" src="https://github.com/user-attachments/assets/94c32b6c-51cd-45db-8c99-c1798cd28e25" />
 
 
 ## Getting Started
