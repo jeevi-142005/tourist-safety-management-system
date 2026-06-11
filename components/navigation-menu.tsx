@@ -86,7 +86,7 @@ export function NavigationMenu() {
 
   const handleSignOut = async () => {
     await dbClient.auth.signOut()
-    router.push("/")
+    router.push("/auth/login")
   }
 
   const navigationItems = [

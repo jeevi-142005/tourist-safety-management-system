@@ -99,10 +99,27 @@ function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      await nextAuthSignOut({ callbackUrl: "/auth/login" })
-      console.log("[NextAuth] Sign out successful")
+      console.log("[Auth] Starting sign out process...")
+      // Clear Supabase/custom db tokens immediately
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("sb-access-token")
+        localStorage.removeItem("sb-refresh-token")
+        document.cookie = "sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;"
+        document.cookie = "sb-refresh-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;"
+      }
+
+      // NextAuth signout without waiting for promises that might hang
+      nextAuthSignOut({ redirect: false }).catch(() => {})
+      
+      console.log("[Auth] Tokens cleared, redirecting to home...")
+      
+      // Force hard redirect immediately
+      setTimeout(() => {
+        window.location.href = "/"
+      }, 100)
     } catch (error) {
-      console.error("[NextAuth] Sign out error:", error)
+      console.error("[Auth] Sign out error:", error)
+      window.location.href = "/"
     }
   }
 
