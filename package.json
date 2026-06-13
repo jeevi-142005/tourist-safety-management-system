@@ -7,7 +7,13 @@
     "pages:build": "npx @cloudflare/next-on-pages",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "db:setup": "npx prisma db push && node prisma/seed.js",
+    "db:seed": "node prisma/seed.js",
+    "db:reset": "npx prisma db push --force-reset && node prisma/seed.js",
+    "db:studio": "npx prisma studio",
+    "postinstall": "npx prisma generate",
+    "setup": "copy .env.example .env 2>nul & npm run db:setup"
   },
   "dependencies": {
     "@ai-sdk/google": "latest",
@@ -84,5 +90,8 @@
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
     "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }

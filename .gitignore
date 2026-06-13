@@ -16,8 +16,16 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
-.env*
+# env files (keep .env.example for contributors)
+.env
+.env.local
+.env.production
+.env.development
+!.env.example
+
+# database (not ignored so it gets shared with contributors)
+!prisma/dev.db
+!prisma/dev.db-journal
 
 # vercel
 .vercel
