@@ -62,7 +62,12 @@ function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
     })
 
     if (res?.error) {
-      throw new Error(res.error || "Invalid login credentials")
+      // NextAuth returns the thrown error message in res.error
+      // If it's the generic "CredentialsSignin", provide a better message
+      const errorMessage = res.error === "CredentialsSignin"
+        ? "Invalid email or password. Please try again."
+        : res.error
+      throw new Error(errorMessage)
     }
 
     console.log("[NextAuth] Sign in successful")
@@ -100,25 +105,29 @@ function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       console.log("[Auth] Starting sign out process...")
-      // Clear Supabase/custom db tokens immediately
+      // Clear any custom tokens
       if (typeof window !== "undefined") {
         localStorage.removeItem("sb-access-token")
         localStorage.removeItem("sb-refresh-token")
+        localStorage.removeItem("tourist-safety-user")
         document.cookie = "sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;"
         document.cookie = "sb-refresh-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;"
       }
 
-      // NextAuth signout without waiting for promises that might hang
-      nextAuthSignOut({ redirect: false }).catch(() => {})
+      // Clear user state immediately so UI updates
+      setUser(null)
+
+      // NextAuth signout - await it properly
+      await nextAuthSignOut({ redirect: false })
       
-      console.log("[Auth] Tokens cleared, redirecting to home...")
+      console.log("[Auth] Signed out, redirecting to login...")
       
-      // Force hard redirect immediately
-      setTimeout(() => {
-        window.location.href = "/"
-      }, 100)
+      // Force hard redirect to the login page
+      window.location.href = "/"
     } catch (error) {
       console.error("[Auth] Sign out error:", error)
+      // Even if signout fails, clear state and redirect
+      setUser(null)
       window.location.href = "/"
     }
   }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { signOut } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -18,6 +19,7 @@ import {
     Battery,
     QrCode,
     Search,
+    LogOut,
     RefreshCw,
     Eye,
     MessageSquare,
@@ -66,8 +68,28 @@ export default function AdminDashboardClient() {
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState("")
     const [statusFilter, setStatusFilter] = useState<string>("all")
+    const [isLoggingOut, setIsLoggingOut] = useState(false)
 
     const [activeTab, setActiveTab] = useState("tourists")
+
+    const handleLogout = async () => {
+        try {
+            setIsLoggingOut(true)
+            // Clear any custom tokens
+            if (typeof window !== "undefined") {
+                localStorage.removeItem("sb-access-token")
+                localStorage.removeItem("sb-refresh-token")
+                localStorage.removeItem("tourist-safety-user")
+            }
+            await signOut({ redirect: false })
+            window.location.href = "/"
+        } catch (error) {
+            console.error("Logout error:", error)
+            window.location.href = "/"
+        } finally {
+            setIsLoggingOut(false)
+        }
+    }
 
     useEffect(() => {
         fetchDashboardData()
@@ -205,6 +227,14 @@ export default function AdminDashboardClient() {
                                 <span className="text-[9px] text-blue-400 font-medium">Administrator</span>
                             </div>
                         </div>
+                        <button 
+                            onClick={handleLogout}
+                            disabled={isLoggingOut}
+                            className="text-gray-500 hover:text-red-400 p-1 rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50"
+                            title="Logout"
+                        >
+                            <LogOut className="h-4 w-4" />
+                        </button>
                     </div>
                 </div>
             </aside>
@@ -226,6 +256,16 @@ export default function AdminDashboardClient() {
                         <Button onClick={fetchDashboardData} variant="outline" size="sm" className="h-8">
                             <RefreshCw className="h-3.5 w-3.5 mr-2" />
                             Refresh
+                        </Button>
+                        <Button 
+                            onClick={handleLogout} 
+                            disabled={isLoggingOut} 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                        >
+                            <LogOut className="h-3.5 w-3.5 mr-2" />
+                            {isLoggingOut ? "Logging out..." : "Logout"}
                         </Button>
                     </div>
                 </header>

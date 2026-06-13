@@ -1,8 +1,13 @@
-import { createClient } from "@/lib/db-client/server"
 import { NextResponse } from "next/server"
 
 export async function POST() {
-  const dbClient = await createClient()
-  await dbClient.auth.signOut()
-  return NextResponse.redirect(new URL("/", process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"))
+  // The actual signout is handled client-side via next-auth/react's signOut()
+  // This route just provides a fallback redirect endpoint
+  const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+  return NextResponse.redirect(new URL("/", baseUrl))
+}
+
+export async function GET() {
+  const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+  return NextResponse.redirect(new URL("/", baseUrl))
 }

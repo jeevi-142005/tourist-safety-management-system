@@ -68,10 +68,9 @@ export function LoginSelection() {
 
     try {
       await register(email, password, name, selectedRole)
-      setSuccess("Registration successful! Please check your email to verify your account.")
-      setIsLogin(true)
-      setPassword("")
-      setConfirmPassword("")
+      // If we get here, registration AND auto-login succeeded
+      // The session update will redirect the user automatically
+      setSuccess("Account created successfully! Redirecting...")
     } catch (err) {
       console.error("[Auth] Registration error:", err)
       setError(err instanceof Error ? err.message : "Registration failed")
