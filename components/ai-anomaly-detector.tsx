@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Brain, AlertTriangle, TrendingUp, Activity, Shield, Eye, Wifi, Battery, MapPin, Zap } from "lucide-react"
+import { Brain, AlertTriangle, TrendingUp, Activity, Shield, Eye, Wifi, Battery, MapPin, Zap, RefreshCw } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useAlerts } from "@/hooks/use-alerts"
 import { analyzeAndStoreAnomalies, getUserAnomalies, resolveUserAnomaly } from "@/app/actions/anomaly"
@@ -40,16 +40,18 @@ export function AIAnomalyDetector() {
   const { createAlert } = useAlerts()
   const [isActive, setIsActive] = useState(false)
   const [anomalies, setAnomalies] = useState<AnomalyPattern[]>([])
-  const [deviceMetrics, setDeviceMetrics] = useState<DeviceMetrics>({
-    battery_level: 100,
-    connection_strength: 100,
-    location_accuracy: 95,
+  const [deviceMetrics, setDeviceMetrics] = useState<DeviceMetrics & { gpsAccuracyMeters?: number }>({
+    battery_level: 0,
+    connection_strength: 0,
+    location_accuracy: 0,
     movement_pattern: "stationary",
-    ambient_light: 50,
-    noise_level: 30,
+    ambient_light: 0,
+    noise_level: 0,
+    gpsAccuracyMeters: undefined,
   })
   const [threatLevel, setThreatLevel] = useState<"safe" | "low" | "medium" | "high" | "critical">("safe")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [metricsLoaded, setMetricsLoaded] = useState(false)
   const [lastAnalysis, setLastAnalysis] = useState<Date | null>(null)
   const [monitoringStats, setMonitoringStats] = useState({
     totalScans: 0,
@@ -61,6 +63,11 @@ export function AIAnomalyDetector() {
   const analysisIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const deviceMonitorRef = useRef<NodeJS.Timeout | null>(null)
   const uptimeStartRef = useRef<Date>(new Date())
+
+  // Load real device metrics immediately on mount (even in standby)
+  useEffect(() => {
+    updateDeviceMetrics().then(() => setMetricsLoaded(true))
+  }, [])
 
   useEffect(() => {
     if (user?.id) {
@@ -95,12 +102,12 @@ export function AIAnomalyDetector() {
 
   const startAnomalyDetection = () => {
     analysisIntervalRef.current = setInterval(performAnomalyAnalysis, 60000) // Every 60 seconds
-    deviceMonitorRef.current = setInterval(updateDeviceMetrics, 5000) // Every 5 seconds
+    deviceMonitorRef.current = setInterval(() => updateDeviceMetrics().then(() => setMetricsLoaded(true)), 5000) // Every 5 seconds
 
     uptimeStartRef.current = new Date()
 
     performAnomalyAnalysis()
-    updateDeviceMetrics()
+    updateDeviceMetrics().then(() => setMetricsLoaded(true))
   }
 
   const stopAnomalyDetection = () => {
@@ -141,7 +148,8 @@ export function AIAnomalyDetector() {
             const accuracy = position.coords.accuracy
             setDeviceMetrics((prev) => ({
               ...prev,
-              location_accuracy: Math.max(0, Math.min(100, 100 - (accuracy / 50))),
+              location_accuracy: Math.max(0, Math.min(100, 100 - (accuracy / 50) * 100)),
+              gpsAccuracyMeters: Math.round(accuracy),
               movement_pattern: detectRealMovementPattern(position.coords.speed || 0)
             }))
           },
@@ -149,6 +157,7 @@ export function AIAnomalyDetector() {
             setDeviceMetrics((prev) => ({
               ...prev,
               location_accuracy: 0,
+              gpsAccuracyMeters: undefined,
               movement_pattern: "stationary"
             }))
           },
@@ -443,9 +452,11 @@ export function AIAnomalyDetector() {
               </div>
               <Progress value={deviceMetrics.battery_level} className="h-3 mb-2" />
               <div className="flex justify-between items-center">
-                <p className="text-sm font-bold text-blue-600">{deviceMetrics.battery_level}%</p>
+                <p className="text-sm font-bold text-blue-600">
+                  {!metricsLoaded ? "Detecting..." : `${deviceMetrics.battery_level}%`}
+                </p>
                 <Badge variant="outline" className="text-xs">
-                  {deviceMetrics.battery_level > 50 ? "Good" : deviceMetrics.battery_level > 20 ? "Low" : "Critical"}
+                  {!metricsLoaded ? "..." : deviceMetrics.battery_level > 50 ? "Good" : deviceMetrics.battery_level > 20 ? "Low" : "Critical"}
                 </Badge>
               </div>
             </div>
@@ -457,13 +468,16 @@ export function AIAnomalyDetector() {
               </div>
               <Progress value={deviceMetrics.connection_strength} className="h-3 mb-2" />
               <div className="flex justify-between items-center">
-                <p className="text-sm font-bold text-green-600">{deviceMetrics.connection_strength}%</p>
+                <p className="text-sm font-bold text-green-600">
+                  {!metricsLoaded ? "Detecting..." : `${deviceMetrics.connection_strength}%`}
+                </p>
                 <Badge variant="outline" className="text-xs">
-                  {deviceMetrics.connection_strength > 70
-                    ? "Strong"
-                    : deviceMetrics.connection_strength > 30
-                      ? "Weak"
-                      : "Poor"}
+                  {!metricsLoaded ? "..."
+                    : deviceMetrics.connection_strength > 70
+                      ? "Strong"
+                      : deviceMetrics.connection_strength > 30
+                        ? "Weak"
+                        : "Poor"}
                 </Badge>
               </div>
             </div>
@@ -475,9 +489,13 @@ export function AIAnomalyDetector() {
               </div>
               <Progress value={deviceMetrics.location_accuracy} className="h-3 mb-2" />
               <div className="flex justify-between items-center">
-                <p className="text-sm font-bold text-purple-600">{deviceMetrics.location_accuracy}%</p>
+                <p className="text-sm font-bold text-purple-600">
+                  {(deviceMetrics as any).gpsAccuracyMeters !== undefined
+                    ? `±${(deviceMetrics as any).gpsAccuracyMeters}m`
+                    : deviceMetrics.location_accuracy > 0 ? `${Math.round(deviceMetrics.location_accuracy)}%` : "No GPS"}
+                </p>
                 <Badge variant="outline" className="text-xs">
-                  GPS
+                  {deviceMetrics.location_accuracy > 70 ? "High" : deviceMetrics.location_accuracy > 30 ? "Medium" : "Low"}
                 </Badge>
               </div>
             </div>

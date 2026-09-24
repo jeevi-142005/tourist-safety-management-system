@@ -150,7 +150,7 @@ async function analyzeGeofenceEvent(
   longitude: number,
 ) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `
     Analyze this geofence security event:

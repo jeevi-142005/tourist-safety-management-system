@@ -112,7 +112,7 @@ If no significant anomalies are detected, return:
 }
 `
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
     const result = await model.generateContent(analysisPrompt)
     const response = await result.response
     const analysisText = response.text()

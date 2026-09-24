@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const transcribedText = await transcribeAudio(audioFile, language)
 
     // Analyze emergency content with AI
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `
     Analyze the following emergency voice message and extract key information:

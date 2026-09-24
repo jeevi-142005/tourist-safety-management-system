@@ -37,7 +37,7 @@ const SafetyPredictionSchema = z.object({
 
 export class AIAutomationService {
   private static instance: AIAutomationService
-  private model = google("gemini-2.0-flash-exp")
+  private model = google("gemini-2.5-flash")
 
   private constructor() {}
 

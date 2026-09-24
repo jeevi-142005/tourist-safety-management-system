@@ -12,15 +12,8 @@ const languages = [
   { code: "es" as Language, name: "Español", flag: "🇪🇸" },
   { code: "fr" as Language, name: "Français", flag: "🇫🇷" },
   { code: "de" as Language, name: "Deutsch", flag: "🇩🇪" },
-  { code: "it" as Language, name: "Italiano", flag: "🇮🇹" },
-  { code: "pt" as Language, name: "Português", flag: "🇵🇹" },
   { code: "zh" as Language, name: "中文", flag: "🇨🇳" },
-  { code: "ja" as Language, name: "日本語", flag: "🇯🇵" },
-  { code: "ko" as Language, name: "한국어", flag: "🇰🇷" },
-  { code: "ar" as Language, name: "العربية", flag: "🇸🇦" },
-  { code: "ta" as Language, name: "தமிழ்", flag: "🇮🇳" },
   { code: "hi" as Language, name: "हिन्दी", flag: "🇮🇳" },
-  { code: "te" as Language, name: "తెలుగు", flag: "🇮🇳" },
 ]
 
 interface LanguageSelectorProps {

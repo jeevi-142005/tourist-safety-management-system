@@ -38,10 +38,16 @@ export async function GET(
       valid: true,
       digitalId: {
         tokenId,
+        blockchainHash: digitalId.blockchainHash,
+        documentType: digitalId.documentType,
+        documentNumber: digitalId.documentNumber,
+        validFrom: digitalId.validFrom,
         validUntil: digitalId.validUntil,
+        isActive: digitalId.isActive,
+        createdAt: digitalId.createdAt,
+        qrCodeData: digitalId.qrCodeData,
         tourist: {
           name: digitalId.user?.name || null,
-          full_name: digitalId.user?.name || null,
           email: digitalId.user?.email || null,
           phone: digitalId.user?.phone || null,
         },

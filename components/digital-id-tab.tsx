@@ -1,15 +1,10 @@
-"use client"
+﻿"use client"
 
-import { useState, useEffect } from "react"
-import { Shield, CheckCircle, QrCode, Calendar, FileText, XCircle, RefreshCw } from "lucide-react"
-import { Loader2 } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
+import { Shield, CheckCircle, QrCode, Calendar, FileText, User, Phone, Clock } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -19,208 +14,147 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { QRCodeSVG } from "qrcode.react"
-import Link from "next/link"
 
-interface TouristID {
-  id: string
-  document_type: string
-  document_number: string
-  valid_from: string
-  valid_until: string
-  blockchain_hash: string
-  qr_code_data: string
-  is_active: boolean
-  created_at: string
-  emergency_contact_name?: string
-  emergency_contact_phone?: string
-  trip_start_date?: string
-  trip_end_date?: string
+interface VerifiedIdData {
+  tokenId: string
+  blockchainHash: string
+  documentType: string
+  documentNumber: string
+  validFrom: string
+  validUntil: string
+  isActive: boolean
+  createdAt: string
+  qrCodeData?: string | null
+  tourist: {
+    name: string | null
+    email: string | null
+    phone: string | null
+  }
+  emergencyContact: {
+    name: string | null
+    phone: string | null
+  }
+  tripPeriod: {
+    start: string | null
+    end: string | null
+  }
+}
+
+interface DigitalIDTabProps {
+  verifiedIdData?: VerifiedIdData | null
 }
 
 // ---------------------------------------------------------------------------
 // Main smart tab component
 // ---------------------------------------------------------------------------
-export function DigitalIDTab() {
-  const [activeID, setActiveID] = useState<TouristID | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [deactivating, setDeactivating] = useState(false)
-  const [showCreateForm, setShowCreateForm] = useState(false)
-
-  useEffect(() => {
-    fetchActiveID()
-  }, [])
-
-  const fetchActiveID = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch("/api/digital-id")
-      if (!res.ok) {
-        if (res.status === 401) {
-          setError("Please log in to view your Digital ID.")
-          return
-        }
-        throw new Error("Failed to fetch digital ID")
-      }
-      const result = await res.json()
-      const ids: TouristID[] = result.data || []
-      // Only show the most recent active ID
-      const found = ids.find((t) => t.is_active) ?? null
-      setActiveID(found)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleDeactivate = async () => {
-    if (!activeID) return
-    setDeactivating(true)
-    try {
-      const res = await fetch(`/api/digital-id?id=${activeID.id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Failed to deactivate")
-      setActiveID(null)
-      setShowCreateForm(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to deactivate")
-    } finally {
-      setDeactivating(false)
-    }
-  }
-
-  const handleIDCreated = () => {
-    setShowCreateForm(false)
-    fetchActiveID()
-  }
-
-  const isExpired = (validUntil: string) => new Date(validUntil) < new Date()
-  const daysLeft = (validUntil: string) => {
-    const diff = new Date(validUntil).getTime() - Date.now()
-    return Math.ceil(diff / (1000 * 60 * 60 * 24))
-  }
-
-  // Loading
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 space-y-3 animate-in fade-in duration-200">
-        <div className="h-12 w-12 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin" />
-        <p className="text-sm text-gray-500">Loading your Digital ID...</p>
-      </div>
-    )
-  }
-
-  // Error
-  if (error) {
-    return (
-      <div className="max-w-md mx-auto animate-in fade-in duration-200">
-        <Alert className="border-red-200 bg-red-50">
-          <XCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">{error}</AlertDescription>
-        </Alert>
-        <Button variant="outline" onClick={fetchActiveID} className="mt-3 w-full">
-          <RefreshCw className="h-4 w-4 mr-2" />Retry
-        </Button>
-      </div>
-    )
-  }
-
-  // No active ID — show creation form
-  if (!activeID || showCreateForm) {
+export function DigitalIDTab({ verifiedIdData }: DigitalIDTabProps) {
+  if (!verifiedIdData) {
     return (
       <div className="space-y-6 animate-in fade-in duration-200">
         <div className="text-center max-w-xl mx-auto">
           <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
             <Shield className="h-8 w-8 text-blue-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">Create Your Digital Tourist ID</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">No Digital Tourist ID Found</h2>
           <p className="text-sm text-gray-500">
-            A one-time blockchain-verified identity for your trip. Once created, it shows here permanently.
+            A one-time blockchain-verified identity for your trip can only be created by an Admin.
+            Please wait until the Admin generates your ID and provides you with the QR code or ID number.
           </p>
         </div>
-        <DigitalIDCreatorForm onCreated={handleIDCreated} />
       </div>
     )
   }
 
-  // Has active ID — show the card
-  const expired = isExpired(activeID.valid_until)
-  const days = daysLeft(activeID.valid_until)
+  const daysLeft = Math.ceil(
+    (new Date(verifiedIdData.validUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  )
+  const expired = daysLeft <= 0
+  const docTypeLabel =
+    verifiedIdData.documentType === "aadhaar"
+      ? "Aadhaar Card"
+      : verifiedIdData.documentType === "passport"
+      ? "Passport"
+      : verifiedIdData.documentType || "Government ID"
+
+  const qrValue = verifiedIdData.qrCodeData || verifiedIdData.blockchainHash || verifiedIdData.tokenId
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200 max-w-2xl mx-auto">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-gray-900 mb-1">Your Digital Tourist ID</h2>
-        <p className="text-xs text-gray-500">Blockchain-verified travel credential — stored permanently.</p>
+        <p className="text-xs text-gray-500">Blockchain-verified travel credential â€” issued by Admin.</p>
       </div>
 
       {/* Status banner */}
       {expired ? (
         <Alert className="border-red-200 bg-red-50">
-          <XCircle className="h-4 w-4 text-red-600" />
+          <Shield className="h-4 w-4 text-red-600" />
           <AlertDescription className="text-red-800">
-            Your ID has expired. Click <strong>Deactivate &amp; Renew</strong> to create a new one.
+            Your Digital ID has <strong>expired</strong>. Please contact the Admin for renewal.
           </AlertDescription>
         </Alert>
-      ) : days <= 7 ? (
+      ) : daysLeft <= 7 ? (
         <Alert className="border-yellow-200 bg-yellow-50">
-          <Shield className="h-4 w-4 text-yellow-600" />
+          <Clock className="h-4 w-4 text-yellow-600" />
           <AlertDescription className="text-yellow-800">
-            Expiring in <strong>{days} day{days !== 1 ? "s" : ""}</strong>. Consider renewing soon.
+            Your ID is expiring in <strong>{daysLeft} day{daysLeft !== 1 ? "s" : ""}</strong>. Contact Admin to renew.
           </AlertDescription>
         </Alert>
       ) : (
         <Alert className="border-green-200 bg-green-50">
           <CheckCircle className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800">
-            Your Digital ID is <strong>active</strong> and blockchain-verified. Valid for {days} more days.
+            Your Digital ID is <strong>active</strong> and blockchain-verified. Valid for {daysLeft} more days.
           </AlertDescription>
         </Alert>
       )}
 
       {/* ID Card */}
-      <Card className="overflow-hidden shadow-lg">
+      <Card className="overflow-hidden shadow-lg border-0">
         <CardContent className="p-0">
           {/* Gradient header */}
-          <div
-            className={`bg-gradient-to-r ${
-              expired ? "from-gray-400 to-gray-600" : "from-blue-600 to-purple-700"
-            } p-6 text-white`}
-          >
+          <div className={`bg-gradient-to-r ${expired ? "from-gray-400 to-gray-600" : "from-blue-600 to-purple-700"} p-6 text-white`}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center space-x-2">
                 <Shield className="h-6 w-6" />
                 <span className="font-bold text-lg tracking-wide">Digital Tourist ID</span>
               </div>
               <Badge className={`${expired ? "bg-red-500" : "bg-white/20"} text-white border-white/30 text-xs`}>
-                {expired ? "Expired" : "✓ Verified"}
+                {expired ? "Expired" : "âœ“ Admin Verified"}
               </Badge>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
+                <p className="text-xs opacity-70 uppercase tracking-wide">Tourist Name</p>
+                <p className="font-semibold mt-0.5">{verifiedIdData.tourist.name || "â€”"}</p>
+              </div>
+              <div>
                 <p className="text-xs opacity-70 uppercase tracking-wide">Document Type</p>
-                <p className="font-semibold capitalize mt-0.5">{activeID.document_type}</p>
+                <p className="font-semibold capitalize mt-0.5">{docTypeLabel}</p>
               </div>
               <div>
                 <p className="text-xs opacity-70 uppercase tracking-wide">Document No.</p>
-                <p className="font-semibold mt-0.5">***{activeID.document_number.slice(-4)}</p>
+                <p className="font-semibold mt-0.5">***{verifiedIdData.documentNumber?.slice(-4)}</p>
               </div>
               <div>
-                <p className="text-xs opacity-70 uppercase tracking-wide">Issued On</p>
-                <p className="font-semibold mt-0.5">{new Date(activeID.valid_from).toLocaleDateString()}</p>
+                <p className="text-xs opacity-70 uppercase tracking-wide">ID Token</p>
+                <p className="font-mono text-[11px] mt-0.5 opacity-80 truncate">{verifiedIdData.tokenId}</p>
+              </div>
+              <div>
+                <p className="text-xs opacity-70 uppercase tracking-wide">Valid From</p>
+                <p className="font-semibold mt-0.5">{new Date(verifiedIdData.validFrom).toLocaleDateString("en-IN")}</p>
               </div>
               <div>
                 <p className="text-xs opacity-70 uppercase tracking-wide">Valid Until</p>
-                <p className="font-semibold mt-0.5">{new Date(activeID.valid_until).toLocaleDateString()}</p>
+                <p className="font-semibold mt-0.5">{new Date(verifiedIdData.validUntil).toLocaleDateString("en-IN")}</p>
               </div>
-              {activeID.trip_start_date && activeID.trip_end_date && (
+              {verifiedIdData.tripPeriod.start && verifiedIdData.tripPeriod.end && (
                 <div className="col-span-2">
                   <p className="text-xs opacity-70 uppercase tracking-wide">Trip Period</p>
                   <p className="font-semibold mt-0.5">
-                    {new Date(activeID.trip_start_date).toLocaleDateString()} —{" "}
-                    {new Date(activeID.trip_end_date).toLocaleDateString()}
+                    {new Date(verifiedIdData.tripPeriod.start).toLocaleDateString("en-IN")} â€”{" "}
+                    {new Date(verifiedIdData.tripPeriod.end).toLocaleDateString("en-IN")}
                   </p>
                 </div>
               )}
@@ -228,12 +162,12 @@ export function DigitalIDTab() {
           </div>
 
           {/* Body */}
-          <div className="p-5 space-y-4">
+          <div className="p-5 space-y-4 bg-white">
             {/* Stat pills */}
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="p-3 bg-blue-50 rounded-xl">
                 <Calendar className="h-4 w-4 text-blue-600 mx-auto mb-1" />
-                <p className="text-xs font-bold text-blue-700">{Math.max(0, days)} days</p>
+                <p className="text-xs font-bold text-blue-700">{Math.max(0, daysLeft)} days</p>
                 <p className="text-[10px] text-blue-500">remaining</p>
               </div>
               <div className="p-3 bg-green-50 rounded-xl">
@@ -248,15 +182,52 @@ export function DigitalIDTab() {
               </div>
             </div>
 
+            {/* Tourist details */}
+            <Card className="border border-gray-100 shadow-none">
+              <CardHeader className="pb-2 pt-3 px-4">
+                <CardTitle className="text-xs font-bold text-gray-600 uppercase tracking-wide flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5" /> Tourist Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-3 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <p className="text-gray-400 font-medium">Full Name</p>
+                  <p className="text-gray-800 font-semibold mt-0.5">{verifiedIdData.tourist.name || "â€”"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 font-medium">Email</p>
+                  <p className="text-gray-800 font-semibold mt-0.5 truncate">{verifiedIdData.tourist.email || "â€”"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 font-medium">Phone</p>
+                  <p className="text-gray-800 font-semibold mt-0.5">{verifiedIdData.tourist.phone || "â€”"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 font-medium">Document Type</p>
+                  <p className="text-gray-800 font-semibold mt-0.5">{docTypeLabel}</p>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Emergency contact */}
-            {activeID.emergency_contact_name && (
-              <div className="bg-orange-50 border border-orange-100 rounded-xl p-3">
-                <p className="text-xs font-bold text-orange-800 mb-0.5">Emergency Contact</p>
-                <p className="text-sm text-orange-700">
-                  {activeID.emergency_contact_name}
-                  {activeID.emergency_contact_phone && ` — ${activeID.emergency_contact_phone}`}
-                </p>
-              </div>
+            {(verifiedIdData.emergencyContact.name || verifiedIdData.emergencyContact.phone) && (
+              <Card className="border border-orange-100 shadow-none bg-orange-50/50">
+                <CardHeader className="pb-2 pt-3 px-4">
+                  <CardTitle className="text-xs font-bold text-orange-700 uppercase tracking-wide flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5" /> Emergency Contact
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3 grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <p className="text-orange-500 font-medium">Name</p>
+                    <p className="text-orange-900 font-semibold mt-0.5">{verifiedIdData.emergencyContact.name || "â€”"}</p>
+                  </div>
+                  <div>
+                    <p className="text-orange-500 font-medium">Phone</p>
+                    <p className="text-orange-900 font-semibold mt-0.5">{verifiedIdData.emergencyContact.phone || "â€”"}</p>
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* Blockchain details */}
@@ -268,63 +239,52 @@ export function DigitalIDTab() {
               <div>
                 <p className="text-xs text-gray-500">Transaction Hash</p>
                 <p className="font-mono text-[11px] bg-white border rounded p-2 mt-1 break-all text-gray-700">
-                  0x{activeID.blockchain_hash.slice(0, 40)}...
+                  0x{verifiedIdData.blockchainHash?.slice(0, 40)}...
                 </p>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pt-1">
                 <div>
-                  <p className="text-xs text-gray-500">Created</p>
-                  <p className="text-xs text-gray-700 mt-0.5">{new Date(activeID.created_at).toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">Issued On</p>
+                  <p className="text-xs text-gray-700 mt-0.5">{new Date(verifiedIdData.createdAt).toLocaleString("en-IN")}</p>
                 </div>
-                <Link
-                  href={`/verify/${activeID.blockchain_hash}`}
-                  target="_blank"
-                  className="text-xs text-blue-600 hover:underline"
-                >
-                  Verify →
-                </Link>
+                <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px]">
+                  Admin Created
+                </Badge>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex gap-3">
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button className="flex-1" disabled={expired}>
-                    <QrCode className="h-4 w-4 mr-2" />
-                    Show QR Code
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-sm">
-                  <DialogHeader>
-                    <DialogTitle>Digital Tourist ID — QR Code</DialogTitle>
-                    <DialogDescription>Show this to authorities for instant verification</DialogDescription>
-                  </DialogHeader>
-                  <div className="flex flex-col items-center py-4 space-y-3">
-                    <div className="bg-white p-5 border-2 border-gray-200 rounded-xl inline-block">
-                      <QRCodeSVG value={activeID.qr_code_data || ""} size={220} level="H" includeMargin />
-                    </div>
-                    <p className="text-sm text-gray-500">
-                      Valid until {new Date(activeID.valid_until).toLocaleDateString()}
-                    </p>
-                  </div>
-                </DialogContent>
-              </Dialog>
-
-              <Button
-                variant="outline"
-                onClick={handleDeactivate}
-                disabled={deactivating}
-                className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
-              >
-                {deactivating ? (
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <XCircle className="h-4 w-4 mr-2" />
-                )}
-                Deactivate &amp; Renew
-              </Button>
+            {/* Read-only notice */}
+            <div className="flex items-start gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg p-3 border border-gray-100">
+              <Shield className="h-3.5 w-3.5 text-gray-400 shrink-0 mt-0.5" />
+              <span>This ID was created by an Administrator and cannot be modified by the tourist. Contact your admin for any changes.</span>
             </div>
+
+            {/* QR Code Action */}
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={expired}>
+                  <QrCode className="h-4 w-4 mr-2" />
+                  Show QR Code
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Digital Tourist ID â€” QR Code</DialogTitle>
+                  <DialogDescription>Show this to authorities for instant verification</DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col items-center py-4 space-y-3">
+                  <div className="bg-white p-5 border-2 border-gray-200 rounded-xl inline-block">
+                    <QRCodeSVG value={qrValue} size={220} level="H" includeMargin />
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Valid until {new Date(verifiedIdData.validUntil).toLocaleDateString("en-IN")}
+                  </p>
+                  <p className="text-xs text-gray-400 text-center font-mono break-all px-2">
+                    Token: {verifiedIdData.tokenId}
+                  </p>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardContent>
       </Card>
@@ -332,176 +292,3 @@ export function DigitalIDTab() {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Inline creation form (called only when no active ID exists)
-// ---------------------------------------------------------------------------
-function DigitalIDCreatorForm({ onCreated }: { onCreated: () => void }) {
-  const [form, setForm] = useState({
-    documentType: "",
-    documentNumber: "",
-    fullName: "",
-    cityName: "",
-    validUntil: "",
-    emergencyContactName: "",
-    emergencyContactPhone: "",
-    tripStartDate: "",
-    tripEndDate: "",
-  })
-  const [generating, setGenerating] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
-
-  const set = (field: string, value: string) => {
-    setForm((p) => ({ ...p, [field]: value }))
-    setFormError(null)
-  }
-
-  const handleSubmit = async () => {
-    if (!form.documentType || !form.documentNumber || !form.fullName || !form.validUntil) {
-      setFormError("Please fill in all required fields: Full Name, Document Type, Number, and Valid Until.")
-      return
-    }
-    setGenerating(true)
-    try {
-      const res = await fetch("/api/digital-id/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Creation failed")
-      onCreated()
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Failed to create Digital ID")
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  return (
-    <Card className="w-full max-w-2xl mx-auto shadow-sm">
-      <CardContent className="p-6 space-y-5">
-        {formError && (
-          <Alert className="border-red-200 bg-red-50">
-            <XCircle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-800">{formError}</AlertDescription>
-          </Alert>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <Label htmlFor="did-fullName">Full Name *</Label>
-            <Input
-              id="did-fullName"
-              value={form.fullName}
-              onChange={(e) => set("fullName", e.target.value)}
-              placeholder="As per your document"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="did-city">City / Destination</Label>
-            <Input
-              id="did-city"
-              value={form.cityName}
-              onChange={(e) => set("cityName", e.target.value)}
-              placeholder="e.g. Coimbatore"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="did-docType">Document Type *</Label>
-            <Select value={form.documentType} onValueChange={(v) => set("documentType", v)}>
-              <SelectTrigger id="did-docType">
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="aadhaar">Aadhaar Card</SelectItem>
-                <SelectItem value="passport">Passport</SelectItem>
-                <SelectItem value="other">Other Govt. ID</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="did-docNum">Document Number *</Label>
-            <Input
-              id="did-docNum"
-              value={form.documentNumber}
-              onChange={(e) => set("documentNumber", e.target.value)}
-              placeholder="ID number"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="did-validUntil">Valid Until *</Label>
-            <Input
-              id="did-validUntil"
-              type="date"
-              value={form.validUntil}
-              min={new Date().toISOString().split("T")[0]}
-              onChange={(e) => set("validUntil", e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="did-tripStart">Trip Start Date</Label>
-            <Input
-              id="did-tripStart"
-              type="date"
-              value={form.tripStartDate}
-              onChange={(e) => set("tripStartDate", e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="did-tripEnd">Trip End Date</Label>
-            <Input
-              id="did-tripEnd"
-              type="date"
-              value={form.tripEndDate}
-              onChange={(e) => set("tripEndDate", e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="did-ecName">Emergency Contact Name</Label>
-            <Input
-              id="did-ecName"
-              value={form.emergencyContactName}
-              onChange={(e) => set("emergencyContactName", e.target.value)}
-              placeholder="Parent / Spouse"
-            />
-          </div>
-          <div className="space-y-1 md:col-span-2">
-            <Label htmlFor="did-ecPhone">Emergency Contact Phone</Label>
-            <Input
-              id="did-ecPhone"
-              value={form.emergencyContactPhone}
-              onChange={(e) => set("emergencyContactPhone", e.target.value)}
-              placeholder="+91 98765 43210"
-            />
-          </div>
-        </div>
-
-        <div className="bg-blue-50 rounded-xl p-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <Shield className="h-4 w-4 text-blue-600" />
-            <span className="text-sm font-semibold text-blue-800">Security &amp; Privacy</span>
-          </div>
-          <ul className="text-xs text-blue-700 space-y-0.5">
-            <li>• Document numbers are SHA-256 hashed before storage</li>
-            <li>• A unique blockchain hash is generated and logged</li>
-            <li>• Authorities can verify your ID by scanning the QR code</li>
-          </ul>
-        </div>
-
-        <Button onClick={handleSubmit} disabled={generating} className="w-full" size="lg">
-          {generating ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Generating Digital ID...
-            </>
-          ) : (
-            <>
-              <Shield className="h-4 w-4 mr-2" />
-              Generate My Digital Tourist ID
-            </>
-          )}
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}

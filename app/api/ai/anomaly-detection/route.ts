@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Analyze with Gemini AI
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `
     Analyze the following tourist location data for anomalies and safety concerns:
@@ -160,7 +160,9 @@ function performFallbackAnomalyDetection(locations: any[], routes: any[]) {
 function calculateLocationVariance(locations: any[]): number {
   if (locations.length < 2) return 0
 
-  const coords = locations.map((loc) => parseLocation(loc.location)).filter(Boolean)
+  const coords = locations
+    .map((loc) => parseLocation(loc.location))
+    .filter((c): c is { lat: number; lng: number } => c !== null)
   if (coords.length < 2) return 0
 
   const avgLat = coords.reduce((sum, coord) => sum + coord.lat, 0) / coords.length

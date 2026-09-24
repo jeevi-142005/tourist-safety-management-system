@@ -35,7 +35,7 @@ Provide responses that:
 Keep responses concise but comprehensive (2-4 paragraphs max).`
 
     const result = streamText({
-      model: google("gemini-2.0-flash-exp"),
+      model: google("gemini-2.5-flash"),
       messages: [{ role: "system", content: systemPrompt }, ...convertToModelMessages(messages)],
       maxOutputTokens: 800,
       temperature: 0.7,

@@ -16,9 +16,11 @@ interface EmergencyAlertProps {
   description: string
   className?: string
   size?: "sm" | "md" | "lg"
+  isVerified?: boolean
+  onVerifyRequired?: () => void
 }
 
-export function EmergencyAlert({ type, icon, label, description, className, size = "md" }: EmergencyAlertProps) {
+export function EmergencyAlert({ type, icon, label, description, className, size = "md", isVerified = false, onVerifyRequired }: EmergencyAlertProps) {
   const { user } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -112,6 +114,11 @@ export function EmergencyAlert({ type, icon, label, description, className, size
   }
 
   const sendAlert = async () => {
+    if (!isVerified) {
+      setError("Digital Tourist ID verification required. Please scan or enter your admin-issued ID.")
+      onVerifyRequired?.()
+      return
+    }
     if (!user) {
       setError("User not authenticated")
       return
@@ -169,6 +176,7 @@ export function EmergencyAlert({ type, icon, label, description, className, size
               severity: type === 'emergency' ? 'critical' : type === 'medical' ? 'high' : 'medium',
               location_lat: location?.lat,
               location_lng: location?.lng,
+              verified_token: typeof window !== "undefined" ? localStorage.getItem("tourist_verified_id") : null,
               device_info: {
                 userAgent: navigator.userAgent,
                 timestamp: Date.now(),
@@ -227,6 +235,10 @@ export function EmergencyAlert({ type, icon, label, description, className, size
   }
 
   const handleOpenChange = (open: boolean) => {
+    if (open && !isVerified) {
+      onVerifyRequired?.()
+      return
+    }
     setIsOpen(open)
     if (!open) {
       setMessage("")
@@ -266,7 +278,13 @@ export function EmergencyAlert({ type, icon, label, description, className, size
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={() => {
+            if (!isVerified) {
+              onVerifyRequired?.()
+              return
+            }
+            setIsOpen(true)
+          }}
           className={cn(`flex items-center justify-between p-4 rounded-xl border w-full text-left transition-all duration-200 group h-auto ${colors.borderColor} shadow-sm hover:shadow-md relative`, className)}
         >
           <div className="flex items-center space-x-3.5">

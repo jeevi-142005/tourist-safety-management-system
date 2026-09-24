@@ -60,6 +60,53 @@ export function TouristDashboard() {
   const [profileError, setProfileError] = useState<string | null>(null)
   const [digitalIdInfo, setDigitalIdInfo] = useState<any>(null)
   const [showProfileModal, setShowProfileModal] = useState(false)
+  const [isVerified, setIsVerified] = useState(false)
+  const [verifiedIdData, setVerifiedIdData] = useState<any>(null)
+  const [verifyIdInput, setVerifyIdInput] = useState("")
+  const [verifyError, setVerifyError] = useState<string | null>(null)
+  const [isVerifying, setIsVerifying] = useState(false)
+
+  const handleVerifyId = async (idToVerify?: string) => {
+    const id = (idToVerify || verifyIdInput).trim()
+    if (!id) {
+      setVerifyError("Please enter an ID")
+      return
+    }
+    setIsVerifying(true)
+    setVerifyError(null)
+    try {
+      const res = await fetch(`/api/digital-id/verify/${id}`)
+      const data = await res.json()
+      if (data.valid) {
+        setIsVerified(true)
+        setVerifiedIdData(data.digitalId)
+        if (typeof window !== "undefined") {
+          localStorage.setItem("tourist_verified_id", id)
+        }
+      } else {
+        setIsVerified(false)
+        setVerifiedIdData(null)
+        setVerifyError(data.reason || "Invalid ID")
+      }
+    } catch (err) {
+      setIsVerified(false)
+      setVerifiedIdData(null)
+      setVerifyError("Verification failed. Try again.")
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  // Hydrate verification state from localStorage on load
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("tourist_verified_id")
+      if (saved) {
+        setVerifyIdInput(saved)
+        handleVerifyId(saved)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!user) return
@@ -124,7 +171,7 @@ export function TouristDashboard() {
       if (error) throw error
 
       setSaveSuccess(true)
-      setProfile(prev => ({
+      setProfile((prev: any) => ({
         ...prev,
         full_name: profileName,
         phone: profilePhone,
@@ -142,6 +189,22 @@ export function TouristDashboard() {
   const [alerts, setAlerts] = useState<any[]>([])
   const [sentAlerts, setSentAlerts] = useState<any[]>([])
   const [receivedAlerts, setReceivedAlerts] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState("dashboard")
+  const [unreadAlerts, setUnreadAlerts] = useState(0)
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>({
+    lat: 11.0159,
+    lng: 76.9368
+  })
+  const [locationName, setLocationName] = useState("Coimbatore, India")
+  const [locationPermission, setLocationPermission] = useState<"granted" | "denied" | "prompt">("granted")
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isSimulating, setIsSimulating] = useState(false)
+  const [adminAlerts, setAdminAlerts] = useState([])
+  const [batteryLevel, setBatteryLevel] = useState<string>("99%")
+  const [batteryCharging, setBatteryCharging] = useState<boolean>(true)
+  const [isOnline, setIsOnline] = useState(true)
+  const [offlineAlertsCount, setOfflineAlertsCount] = useState(0)
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false)
 
   const fetchAlerts = async () => {
     if (!user) return
@@ -158,7 +221,16 @@ export function TouristDashboard() {
           (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         )
         setAlerts(all)
-        setUnreadAlerts(all.filter((a: any) => a.status === "active").length)
+        const lastViewed = typeof window !== "undefined" ? Number(localStorage.getItem("tourist_last_viewed_alerts") || 0) : 0
+        if (activeTab === "alerts") {
+          setUnreadAlerts(0)
+        } else {
+          const unreadCount = all.filter((a: any) => {
+            const alertTime = new Date(a.created_at).getTime()
+            return a.status === "active" && alertTime > lastViewed
+          }).length
+          setUnreadAlerts(unreadCount)
+        }
       }
     } catch (err) {
       console.error("Failed to fetch alerts:", err)
@@ -170,25 +242,17 @@ export function TouristDashboard() {
     fetchAlerts()
     const interval = setInterval(fetchAlerts, 5000)
     return () => clearInterval(interval)
-  }, [user])
+  }, [user, activeTab])
 
-
-  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>({
-    lat: 11.0159,
-    lng: 76.9368
-  })
-  const [locationName, setLocationName] = useState("Coimbatore, India")
-  const [locationPermission, setLocationPermission] = useState<"granted" | "denied" | "prompt">("granted")
-  const [activeTab, setActiveTab] = useState("dashboard")
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [isSimulating, setIsSimulating] = useState(false)
-  const [adminAlerts, setAdminAlerts] = useState([])
-  const [unreadAlerts, setUnreadAlerts] = useState(3)
-  const [batteryLevel, setBatteryLevel] = useState<string>("99%")
-  const [batteryCharging, setBatteryCharging] = useState<boolean>(true)
-  const [isOnline, setIsOnline] = useState(true)
-  const [offlineAlertsCount, setOfflineAlertsCount] = useState(0)
-  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false)
+  // Clear notification badge when viewing alerts tab
+  useEffect(() => {
+    if (activeTab === "alerts") {
+      setUnreadAlerts(0)
+      if (typeof window !== "undefined") {
+        localStorage.setItem("tourist_last_viewed_alerts", String(Date.now()))
+      }
+    }
+  }, [activeTab])
 
   // AI assistant local chat states
   const [aiMessages, setAiMessages] = useState<Array<{ sender: "user" | "bot"; text: string }>>([
@@ -234,6 +298,7 @@ export function TouristDashboard() {
   }
 
   const checkDangerZone = async (location: { lat: number; lng: number }) => {
+    if (!isVerified) return
     const now = Date.now()
     if (now - lastAlertTime < 60000) return // Prevent spam alerts (1 minute cooldown)
 
@@ -251,6 +316,7 @@ export function TouristDashboard() {
   }
 
   const sendDangerZoneAlert = async (zoneName: string, location: { lat: number; lng: number }) => {
+    if (!isVerified) return
     try {
       const alertData = {
         type: 'geofence',
@@ -466,6 +532,51 @@ export function TouristDashboard() {
     }, 1000)
   }
 
+  const renderVerifyPrompt = () => (
+    <div className="flex flex-col items-center justify-center py-20 h-full animate-in fade-in duration-200">
+      <Card className="w-full max-w-md shadow-xl border-blue-100">
+        <CardHeader className="text-center pb-2">
+          <div className="mx-auto bg-blue-100 text-blue-600 p-4 rounded-full flex items-center justify-center mb-4">
+            <Shield className="w-8 h-8" />
+          </div>
+          <CardTitle className="text-2xl font-bold text-blue-950">Verify Digital ID</CardTitle>
+          <CardDescription className="text-sm">Please enter the ID or scan the QR code to access</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-4">
+          {verifyError && (
+            <Alert variant="destructive" className="py-2">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-xs">{verifyError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="space-y-3">
+            <input 
+              type="text" 
+              placeholder="Enter Blockchain ID" 
+              value={verifyIdInput} 
+              onChange={e => setVerifyIdInput(e.target.value)} 
+              className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow" 
+              onKeyDown={(e) => e.key === 'Enter' && handleVerifyId()}
+            />
+            <Button 
+              onClick={() => handleVerifyId()} 
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 rounded-lg text-sm font-semibold transition-colors shadow-md shadow-blue-500/20"
+              disabled={isVerifying}
+            >
+              {isVerifying ? "Verifying..." : "Verify ID"}
+            </Button>
+          </div>
+          <div className="text-center pt-6">
+            <div className="inline-block bg-gray-50 rounded-lg px-4 py-2 border border-gray-100 text-xs text-gray-500">
+              <span className="font-semibold text-gray-700 mr-2">Example ID:</span>
+              <span className="font-mono bg-white px-2 py-1 rounded border shadow-sm">BCH-TOURIST-ADMIN-999</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+
   return (
     <div className="flex h-screen bg-[#f8fafc] text-gray-800 overflow-hidden font-sans">
       
@@ -487,13 +598,19 @@ export function TouristDashboard() {
           <nav className="space-y-1">
             {[
               { id: "dashboard", label: t("tabs.dashboard"), icon: <Navigation className="h-4 w-4" /> },
-              { id: "alerts", label: t("tabs.alerts"), icon: <Bell className="h-4 w-4" />, badge: unreadAlerts },
-              { id: "tracking", label: t("tabs.tracking"), icon: <MapPin className="h-4 w-4" /> },
+              ...(isVerified ? [
+                { id: "alerts", label: t("tabs.alerts"), icon: <Bell className="h-4 w-4" />, badge: unreadAlerts > 0 ? unreadAlerts : undefined },
+                { id: "tracking", label: t("tabs.tracking"), icon: <MapPin className="h-4 w-4" /> },
+              ] : []),
               { id: "digital-id", label: t("tabs.digital_id"), icon: <User className="h-4 w-4" /> },
-              { id: "emergency", label: t("tabs.emergency"), icon: <Zap className="h-4 w-4" /> },
+              ...(isVerified ? [
+                { id: "emergency", label: t("tabs.emergency"), icon: <Zap className="h-4 w-4" /> },
+              ] : []),
               { id: "safety", label: t("tabs.safety"), icon: <Shield className="h-4 w-4" /> },
               { id: "ai-assistant", label: t("tabs.ai_assistant"), icon: <Brain className="h-4 w-4" /> },
-              { id: "ai-anomaly", label: t("tabs.ai_anomaly"), icon: <Clock className="h-4 w-4" /> },
+              ...(isVerified ? [
+                { id: "ai-anomaly", label: t("tabs.ai_anomaly"), icon: <Clock className="h-4 w-4" /> },
+              ] : []),
               { id: "profile", label: t("navigation.settings") || "Settings", icon: <Settings className="h-4 w-4" /> },
             ].map((item) => {
               const isActive = activeTab === item.id
@@ -501,7 +618,15 @@ export function TouristDashboard() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => {
+                    setActiveTab(item.id)
+                    if (item.id === "alerts") {
+                      setUnreadAlerts(0)
+                      if (typeof window !== "undefined") {
+                        localStorage.setItem("tourist_last_viewed_alerts", String(Date.now()))
+                      }
+                    }
+                  }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                     isActive 
                       ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
@@ -530,17 +655,27 @@ export function TouristDashboard() {
           {/* Glowing SOS Alert Authority Panel */}
           <div className="bg-gradient-to-br from-red-950/60 to-red-900/40 border border-red-500/30 rounded-xl p-4 text-center space-y-3 shadow-lg shadow-red-950/30">
             <div className="text-white font-bold text-sm tracking-wide">{t("emergency.title")}</div>
-            <p className="text-[10px] text-red-300 leading-normal">{t("emergency.send_alert")}</p>
+            <p className="text-[10px] text-red-300 leading-normal">
+              {isVerified ? t("emergency.send_alert") : "Verify ID to activate emergency SOS"}
+            </p>
             
             <div className="flex justify-center">
               <button 
-                onClick={() => setActiveTab("emergency")}
+                onClick={() => {
+                  if (!isVerified) {
+                    setActiveTab("digital-id")
+                  } else {
+                    setActiveTab("emergency")
+                  }
+                }}
                 className="h-14 w-14 bg-gradient-to-tr from-red-600 to-rose-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-red-500/30 hover:scale-105 active:scale-95 transition-all duration-150 animate-pulse"
               >
                 <Phone className="h-6 w-6 text-white" />
               </button>
             </div>
-            <span className="text-[9px] text-gray-500 block">{t("emergency.location_sharing")}</span>
+            <span className="text-[9px] text-gray-500 block">
+              {isVerified ? t("emergency.location_sharing") : "Requires Admin Blockchain ID"}
+            </span>
           </div>
 
           {/* Profile Badge */}
@@ -588,11 +723,19 @@ export function TouristDashboard() {
 
             {/* Notifications Alert Bell */}
             <button 
-              onClick={() => setActiveTab("alerts")}
+              onClick={() => {
+                setActiveTab("alerts")
+                setUnreadAlerts(0)
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("tourist_last_viewed_alerts", String(Date.now()))
+                }
+              }}
               className="relative p-2 bg-gray-50 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
             >
               <Bell className="h-4 w-4" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full"></span>
+              {unreadAlerts > 0 && (
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full"></span>
+              )}
             </button>
 
             {/* User Avatar with Dropdown */}
@@ -749,53 +892,173 @@ export function TouristDashboard() {
                 </Card>
               </div>
 
-              {/* QUICK ACTIONS SECTION */}
-              <Card className="bg-white border-gray-200/80 shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-bold text-gray-800 uppercase tracking-wide">{t("actions.quick_actions")}</CardTitle>
-                  <CardDescription className="text-xs text-gray-400">{t("actions.emergency_assistance")}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    
-                    {/* 1. Emergency */}
-                    <EmergencyAlert
-                      type="emergency"
-                      icon={<AlertTriangle className="h-5 w-5 mr-2" />}
-                      label={t("emergency.emergency")}
-                      description={t("emergency.emergency_desc")}
-                      className="bg-transparent hover:bg-red-50 text-red-600 border border-red-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
-                    />
-
-                    {/* 2. Medical */}
-                    <EmergencyAlert
-                      type="medical"
-                      icon={<Heart className="h-5 w-5 mr-2" />}
-                      label={t("emergency.medical")}
-                      description={t("emergency.medical_desc")}
-                      className="bg-transparent hover:bg-orange-50 text-orange-600 border border-orange-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
-                    />
-
-                    {/* 3. Security */}
-                    <EmergencyAlert
-                      type="security"
-                      icon={<Shield className="h-5 w-5 mr-2" />}
-                      label={t("emergency.security")}
-                      description={t("emergency.security_desc")}
-                      className="bg-transparent hover:bg-yellow-50 text-yellow-600 border border-yellow-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
-                    />
-
-                    {/* 4. Assistance */}
-                    <EmergencyAlert
-                      type="assistance"
-                      icon={<HelpCircle className="h-5 w-5 mr-2" />}
-                      label={t("emergency.assistance")}
-                      description={t("emergency.assistance_desc")}
-                      className="bg-transparent hover:bg-blue-50 text-blue-600 border border-blue-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
-                    />
+              {!isVerified ? (
+                <div className="bg-white border border-gray-200/80 rounded-2xl p-8 sm:p-10 shadow-sm text-center max-w-xl mx-auto my-8 space-y-6 animate-in fade-in duration-200">
+                  <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                    <Shield className="w-8 h-8" />
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-bold text-gray-900">Digital Tourist ID Verification Required</h3>
+                    <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
+                      Please enter the ID or scan the QR code. Quick Actions, Live GPS Tracking, Emergency Dispatch, Danger Zone Alerts, and AI Safety features are unlocked once your admin-issued Blockchain ID is verified.
+                    </p>
+                  </div>
+
+                  {verifyError && (
+                    <Alert variant="destructive" className="py-2.5 text-left">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription className="text-xs font-medium">{verifyError}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="space-y-3">
+                    <input 
+                      type="text" 
+                      placeholder="Please enter the ID or scan the QR code" 
+                      value={verifyIdInput} 
+                      onChange={e => setVerifyIdInput(e.target.value)} 
+                      className="w-full p-3.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all" 
+                      onKeyDown={(e) => e.key === 'Enter' && handleVerifyId()}
+                    />
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={() => handleVerifyId()} 
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-xs font-semibold shadow-md shadow-blue-500/20"
+                        disabled={isVerifying}
+                      >
+                        {isVerifying ? "Verifying..." : "Verify ID"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveTab("digital-id")}
+                        className="text-xs py-3 rounded-xl border-gray-200 hover:bg-gray-50"
+                      >
+                        Scan QR Code
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <div className="inline-block bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100 text-[11px] text-gray-500">
+                      <span className="font-semibold text-gray-700 mr-2">Admin Example ID:</span>
+                      <span className="font-mono bg-white px-2 py-0.5 rounded border text-blue-600 font-bold shadow-xs">BCH-TOURIST-ADMIN-999</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* DIGITAL ID CARD — shown when verified */}
+                  {verifiedIdData && (
+                    <Card className="bg-gradient-to-r from-blue-600 to-purple-700 border-0 shadow-lg text-white overflow-hidden">
+                      <CardContent className="p-5">
+                        <div className="flex items-center justify-between">
+                          {/* Left: Info */}
+                          <div className="flex items-center space-x-4">
+                            <div className="p-2.5 bg-white/15 rounded-xl">
+                              <Shield className="h-6 w-6 text-white" />
+                            </div>
+                            <div>
+                              <div className="flex items-center space-x-2 mb-0.5">
+                                <span className="font-bold text-sm text-white">Digital Tourist ID</span>
+                                <span className="bg-white/20 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                  ✓ Admin Verified
+                                </span>
+                              </div>
+                              <p className="text-xs text-white/70">
+                                {verifiedIdData.tourist?.name || user?.name || "Tourist"} &nbsp;·&nbsp;
+                                {verifiedIdData.documentType === "aadhaar" ? "Aadhaar Card"
+                                  : verifiedIdData.documentType === "passport" ? "Passport"
+                                  : verifiedIdData.documentType || "Govt. ID"} &nbsp;·&nbsp;
+                                ***{verifiedIdData.documentNumber?.slice(-4)}
+                              </p>
+                              {verifiedIdData.tripPeriod?.start && verifiedIdData.tripPeriod?.end && (
+                                <p className="text-[10px] text-white/60 mt-0.5">
+                                  Trip: {new Date(verifiedIdData.tripPeriod.start).toLocaleDateString("en-IN")} → {new Date(verifiedIdData.tripPeriod.end).toLocaleDateString("en-IN")}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {/* Right: Validity + CTA */}
+                          <div className="text-right shrink-0 ml-4">
+                            <p className="text-[10px] text-white/60 uppercase tracking-wider">Valid Until</p>
+                            <p className="font-bold text-sm text-white">{new Date(verifiedIdData.validUntil).toLocaleDateString("en-IN")}</p>
+                            <button
+                              onClick={() => setActiveTab("digital-id")}
+                              className="mt-1 text-[10px] text-white/80 hover:text-white underline underline-offset-2 transition-colors"
+                            >
+                              View Full ID →
+                            </button>
+                          </div>
+                        </div>
+                        {/* Emergency contact inline */}
+                        {(verifiedIdData.emergencyContact?.name || verifiedIdData.emergencyContact?.phone) && (
+                          <div className="mt-3 pt-3 border-t border-white/10 flex items-center space-x-2 text-xs text-white/70">
+                            <span className="font-semibold text-white/80">Emergency Contact:</span>
+                            <span>{verifiedIdData.emergencyContact.name}</span>
+                            {verifiedIdData.emergencyContact.phone && (
+                              <span className="font-mono">{verifiedIdData.emergencyContact.phone}</span>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* QUICK ACTIONS SECTION */}
+                  <Card className="bg-white border-gray-200/80 shadow-sm">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-bold text-gray-800 uppercase tracking-wide">{t("actions.quick_actions")}</CardTitle>
+                      <CardDescription className="text-xs text-gray-400">{t("actions.emergency_assistance")}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        
+                        {/* 1. Emergency */}
+                        <EmergencyAlert
+                          type="emergency"
+                          icon={<AlertTriangle className="h-5 w-5 mr-2" />}
+                          label={t("emergency.emergency")}
+                          description={t("emergency.emergency_desc")}
+                          className="bg-transparent hover:bg-red-50 text-red-600 border border-red-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
+                          isVerified={isVerified}
+                          onVerifyRequired={() => setActiveTab("digital-id")}
+                        />
+
+                        {/* 2. Medical */}
+                        <EmergencyAlert
+                          type="medical"
+                          icon={<Heart className="h-5 w-5 mr-2" />}
+                          label={t("emergency.medical")}
+                          description={t("emergency.medical_desc")}
+                          className="bg-transparent hover:bg-orange-50 text-orange-600 border border-orange-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
+                          isVerified={isVerified}
+                          onVerifyRequired={() => setActiveTab("digital-id")}
+                        />
+
+                        {/* 3. Security */}
+                        <EmergencyAlert
+                          type="security"
+                          icon={<Shield className="h-5 w-5 mr-2" />}
+                          label={t("emergency.security")}
+                          description={t("emergency.security_desc")}
+                          className="bg-transparent hover:bg-yellow-50 text-yellow-600 border border-yellow-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
+                          isVerified={isVerified}
+                          onVerifyRequired={() => setActiveTab("digital-id")}
+                        />
+
+                        {/* 4. Assistance */}
+                        <EmergencyAlert
+                          type="assistance"
+                          icon={<HelpCircle className="h-5 w-5 mr-2" />}
+                          label={t("emergency.assistance")}
+                          description={t("emergency.assistance_desc")}
+                          className="bg-transparent hover:bg-blue-50 text-blue-600 border border-blue-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
+                          isVerified={isVerified}
+                          onVerifyRequired={() => setActiveTab("digital-id")}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
 
               {/* MIDDLE DOUBLE COLUMN PANEL GRID */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1155,11 +1418,15 @@ export function TouristDashboard() {
 
               </div>
 
+                </>
+              )}
+
             </div>
           )}
 
           {/* TAB 2: ALERTS TAB */}
           {activeTab === "alerts" && (
+            isVerified ? (
             <div className="space-y-6 animate-in fade-in duration-200">
               
               {/* Header Stats Row */}
@@ -1343,16 +1610,18 @@ export function TouristDashboard() {
 
               </div>
             </div>
+            ) : renderVerifyPrompt()
           )}
 
 
           {/* TAB 3: DIGITAL ID */}
           {activeTab === "digital-id" && (
-            <DigitalIDTab />
+            isVerified ? <DigitalIDTab verifiedIdData={verifiedIdData} /> : renderVerifyPrompt()
           )}
 
           {/* TAB 4: LIVE TRACKING */}
           {activeTab === "tracking" && (
+            isVerified ? (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="text-center max-w-xl mx-auto mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-1">{t("tracking.title")}</h2>
@@ -1360,10 +1629,12 @@ export function TouristDashboard() {
               </div>
               <LiveTrackingMap />
             </div>
+            ) : renderVerifyPrompt()
           )}
 
           {/* TAB 5: EMERGENCY SYSTEM */}
           {activeTab === "emergency" && (
+            isVerified ? (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="text-center max-w-xl mx-auto mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-1">{t("emergency.title")}</h2>
@@ -1371,6 +1642,7 @@ export function TouristDashboard() {
               </div>
               <EnhancedEmergencySystem />
             </div>
+            ) : renderVerifyPrompt()
           )}
 
           {/* TAB 6: SAFETY ADVICE */}
@@ -1441,6 +1713,7 @@ export function TouristDashboard() {
 
           {/* TAB 9: REPORTS (AI ANOMALY DETECTOR) */}
           {activeTab === "ai-anomaly" && (
+            isVerified ? (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="text-center max-w-xl mx-auto mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-1">{t("tabs.ai_anomaly")}</h2>
@@ -1448,6 +1721,7 @@ export function TouristDashboard() {
               </div>
               <AIAnomalyDetector />
             </div>
+            ) : renderVerifyPrompt()
           )}
 
           {/* TAB 10: SETTINGS / PROFILE DETAILS */}

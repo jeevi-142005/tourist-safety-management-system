@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
       : ""
 
     const { text } = await generateText({
-      model: google("gemini-2.0-flash-exp"),
+      model: google("gemini-2.5-flash"),
       prompt: `You are a helpful AI assistant for a tourist safety system. Provide helpful, accurate, and safety-focused advice to tourists.
 
 ${contextInfo}

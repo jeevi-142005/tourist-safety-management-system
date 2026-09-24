@@ -14,17 +14,32 @@ export async function generateSafetyAdvice(location: string, situation: string) 
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
-    const prompt = `As a tourist safety expert, provide specific safety advice for a tourist in ${location} who is experiencing: ${situation}. 
-    
-    Please provide:
-    1. Immediate safety recommendations
-    2. Local emergency contacts if relevant
-    3. Cultural considerations
-    4. Prevention tips for similar situations
-    
-    Keep the response concise, practical, and actionable. Focus on tourist safety.`
+    const prompt = `You are an expert tourist safety advisor. A tourist is currently in **${location}** and is experiencing the following situation: **${situation}**.
+
+Generate a comprehensive, well-structured safety report in Markdown format with the following sections:
+
+### Tourist Safety in [Location] — [Situation]
+
+**1. Immediate Safety Recommendations:**
+Provide 4–6 specific, actionable bullet points the tourist should do RIGHT NOW. Be highly specific to the location and situation.
+
+**2. Local Emergency Contacts:**
+List all relevant emergency numbers:
+- All-in-One Emergency (112 for India)
+- Police, Ambulance, Fire
+- Location-specific helpline (e.g., Kodaikanal Police Station with actual number if known)
+- Tourist helpline if applicable
+- Nearest hospital or medical facility name
+
+**3. Cultural Considerations:**
+List 3–4 culturally specific behaviors, local driving habits, language tips, or social norms relevant to the location that could affect safety.
+
+**4. Prevention Tips for Similar Situations:**
+List 5–6 practical preventive steps the tourist should follow in the future to avoid or better handle this type of situation (packing tips, weather preparedness, informing others, etc.).
+
+Use proper Markdown formatting: bold headings, bullet points, horizontal rules between sections. Make it detailed, professional, and genuinely useful. Do NOT truncate — write the full response.`
 
     const result = await model.generateContent(prompt)
     const response = await result.response
@@ -49,17 +64,46 @@ export async function analyzeTravelRisk(destination: string, travelDate: string)
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
-    const prompt = `Analyze the travel risk for ${destination} on ${travelDate}. Consider:
-    - Current safety conditions
-    - Weather patterns
-    - Local events or festivals
-    - Political stability
-    - Health considerations
-    - Tourist-specific risks
-    
-    Provide a risk level (Low/Medium/High) and specific recommendations.`
+    const prompt = `You are a professional travel risk analyst. Generate a detailed travel risk assessment report in Markdown format for a tourist planning to visit **${destination}** on **${travelDate}**.
+
+Structure the report exactly as follows:
+
+---
+
+**Travel Risk Assessment: ${destination} — ${travelDate}**
+
+**1. Current Safety Conditions (Projected for the travel date):**
+Describe general security, crime rates, terrorism threat level, common risks for tourists.
+
+**2. Weather Patterns (for the travel date):**
+Describe seasonal weather, average temperatures, precipitation chance, any weather-related risks.
+
+**3. Local Events or Festivals (Projected for that period):**
+Describe known or likely local events, cultural festivals, sporting events, or public gatherings that may impact the travel experience (crowds, cost, transport).
+
+**4. Political Stability (Projected for the travel date):**
+Describe government stability, likelihood of protests or strikes, travel advisories.
+
+**5. Health Considerations:**
+Describe healthcare quality, required or recommended vaccinations, food/water safety, any known disease risks, COVID or endemic illness status.
+
+**6. Tourist-Specific Risks:**
+List the top risks unique to tourists: pickpocketing, scams, language barriers, transportation issues, over-tourism areas, etc.
+
+---
+
+**Overall Risk Level: [LOW / MEDIUM / HIGH]**
+
+Justify the overall risk level with 2–3 sentences.
+
+---
+
+**Specific Recommendations:**
+Provide 6–8 numbered, actionable recommendations for staying safe, organized by priority.
+
+Use proper Markdown: bold headings, bullet points, horizontal rules. Be thorough, specific, and genuinely useful. Do NOT truncate — write the full detailed response.`
 
     const result = await model.generateContent(prompt)
     const response = await result.response
@@ -83,7 +127,7 @@ export async function analyzeDeviceMetricsForAnomalies(metrics: any, location: a
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
     const prompt = `Act as an AI Security Guardian for a tourist.
     Analyze the following real-time device and environmental metrics:

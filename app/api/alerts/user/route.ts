@@ -150,6 +150,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Verify that the tourist has verified their Digital Tourist ID
+    const verifiedToken = body.verified_token || request.headers.get("x-digital-id")
+    let isIdVerified = false
+    if (verifiedToken) {
+      const idRecord = await db.touristId.findFirst({
+        where: { blockchainHash: String(verifiedToken), isActive: true }
+      })
+      if (idRecord && new Date(idRecord.validUntil) >= new Date()) {
+        isIdVerified = true
+      }
+    }
+    if (!isIdVerified) {
+      const userTouristId = await db.touristId.findFirst({
+        where: { userId, isActive: true }
+      })
+      if (userTouristId && new Date(userTouristId.validUntil) >= new Date()) {
+        isIdVerified = true
+      }
+    }
+
+    if (!isIdVerified) {
+      return NextResponse.json(
+        { error: "Verification required: You must verify your admin-issued Digital Tourist ID before sending alerts." },
+        { status: 403 }
+      )
+    }
+
     const alert = await db.emergencyAlert.create({
       data: {
         userId,

@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       timeframe: '7 days'
     };
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `
     Analyze the following tourist safety data and calculate a safety score (0-100) with detailed reasoning:
