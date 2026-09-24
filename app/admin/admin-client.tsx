@@ -10,8 +10,45 @@ import { AlertsTab } from "@/components/admin/alerts-tab"
 import { ResourcesTab } from "@/components/admin/resources-tab"
 import { NotificationsTab } from "@/components/admin/notifications-tab"
 import {
-  Users, AlertTriangle, Shield, QrCode, Bell, Ambulance, LogOut, RefreshCw, LayoutDashboard, Menu, X, History, Sparkles, Plus
+  Users, AlertTriangle, Shield, QrCode, Bell, Ambulance, LogOut, RefreshCw, LayoutDashboard, Menu, X, History, Sparkles, Plus, MessageSquare
 } from "lucide-react"
+
+interface Tourist {
+    id: string
+    full_name: string
+    email: string
+    phone: string
+    emergency_contact: string
+    emergency_phone: string
+    blockchain_id: string
+    qr_code_data: string
+    created_at: string
+    current_location: {
+        latitude: number
+        longitude: number
+        timestamp: string
+        battery_level: number
+        is_emergency: boolean
+    } | null
+    safety_score: number
+    risk_level: string
+    active_alerts_count: number
+    status: "safe" | "alert" | "emergency"
+}
+
+interface DashboardStats {
+    activeTourists: number
+    activeAlerts: number
+    criticalAlerts: number
+    resolvedToday: number
+    systemUptime: number
+    avgResponseTime: number
+    geoZones: number
+    blockchainTransactions: number
+    aiEfficiency: number
+    threatDetectionAccuracy: number
+    unreadNotifications?: number
+}
 
 export default function AdminDashboardClient() {
   const [tourists, setTourists] = useState<Tourist[]>([])
@@ -20,8 +57,56 @@ export default function AdminDashboardClient() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  
+  const [activeTab, setActiveTab] = useState("overview")
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isSimulatingSMS, setIsSimulatingSMS] = useState(false)
 
-  const [activeTab, setActiveTab] = useState("tourists")
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      const [touristsResponse, statsResponse] = await Promise.all([
+          fetch("/api/admin/tourists"),
+          fetch("/api/admin/dashboard-stats").catch(() => fetch("/api/admin/stats")), // Fallback if route changed
+      ])
+
+      if (touristsResponse.ok) {
+          const touristsData = await touristsResponse.json()
+          setTourists(touristsData.tourists)
+      }
+
+      if (statsResponse.ok) {
+          const statsData = await statsResponse.json()
+          setStats(statsData)
+      }
+    } catch (error) {
+        console.error("Error fetching dashboard data:", error)
+    } finally {
+        setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchDashboardData()
+    const interval = setInterval(fetchDashboardData, 30000)
+    return () => clearInterval(interval)
+  }, [fetchDashboardData])
+
+  const simulateTwilioSMS = async () => {
+      try {
+          setIsSimulatingSMS(true)
+          const res = await fetch("/api/admin/simulate-twilio", { method: "POST" })
+          if (res.ok) {
+              await fetchDashboardData()
+              alert("Twilio SMS Webhook simulated successfully. Alert created.")
+          } else {
+              alert("Simulation failed.")
+          }
+      } catch (error) {
+          console.error("Simulation error:", error)
+      } finally {
+          setIsSimulatingSMS(false)
+      }
+  }
 
   const handleLogout = async () => {
     try {
@@ -190,6 +275,17 @@ export default function AdminDashboardClient() {
               <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></div>
               <span className="text-xs text-emerald-700 font-medium">System Operational</span>
             </div>
+            <Button 
+                onClick={simulateTwilioSMS} 
+                disabled={isSimulatingSMS}
+                variant="outline" 
+                size="sm" 
+                className="h-8 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 hidden md:flex"
+                title="Simulates receiving an SMS from a tourist without internet via Twilio"
+            >
+                <MessageSquare className="h-3.5 w-3.5 mr-2" />
+                {isSimulatingSMS ? "Simulating..." : "Simulate Offline SMS"}
+            </Button>
             <Button onClick={fetchDashboardData} variant="outline" size="sm" className="h-8">
               <RefreshCw className="h-3.5 w-3.5 mr-2" />
               Refresh
