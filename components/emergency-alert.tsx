@@ -285,20 +285,20 @@ export function EmergencyAlert({ type, icon, label, description, className, size
             }
             setIsOpen(true)
           }}
-          className={cn(`flex items-center justify-between p-4 rounded-xl border w-full text-left transition-all duration-200 group h-auto ${colors.borderColor} shadow-sm hover:shadow-md relative`, className)}
+          className={cn(`flex items-center justify-between p-3.5 sm:p-4 rounded-xl border w-full text-left transition-all duration-200 group h-auto ${colors.borderColor} shadow-sm hover:shadow-md relative overflow-hidden gap-2`, className)}
         >
-          <div className="flex items-center space-x-3.5">
-            <div className={`p-2.5 rounded-lg ${colors.iconBg}`}>
+          <div className="flex items-center space-x-3 min-w-0 flex-1">
+            <div className={`p-2 rounded-lg shrink-0 ${colors.iconBg}`}>
               {icon}
             </div>
-            <div>
-              <div className={`font-bold text-xs ${colors.textColor}`}>{label}</div>
-              <span className="text-[10px] text-gray-400 font-medium block mt-0.5">{description}</span>
+            <div className="min-w-0 flex-1">
+              <div className={`font-bold text-xs ${colors.textColor} truncate`} title={label}>{label}</div>
+              <span className="text-[10px] text-gray-400 font-medium block mt-0.5 truncate" title={description}>{description}</span>
             </div>
           </div>
           <ChevronRight className={`h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5 ${colors.textColor}`} />
           {!isOnline && (
-            <WifiOff className="absolute -top-1 -right-1 h-3.5 w-3.5 text-orange-500" />
+            <WifiOff className="absolute -top-1 -right-1 h-3.5 w-3.5 text-orange-500 shrink-0" />
           )}
         </button>
       </DialogTrigger>

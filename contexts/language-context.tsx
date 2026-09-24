@@ -4,7 +4,7 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 
-export type Language = "en" | "es" | "fr" | "de" | "zh" | "hi"
+export type Language = "en" | "es" | "fr" | "de" | "zh" | "hi" | "ta" | "te"
 
 export interface LanguageContextType {
   language: Language
@@ -26,6 +26,8 @@ const translations = {
     "header.authority.title": "Authority Command Center",
     "header.authority.subtitle": "Tourist Safety Monitoring & Response System",
     "header.system.operational": "System Operational",
+    "navigation.profile": "navigation.profile",
+    "navigation.settings": "Navigation Settings",
 
     // Tabs
     "tabs.dashboard": "Dashboard",
@@ -885,6 +887,7 @@ const translations = {
     "common.loading_dashboard": "加载仪表板...",
   },
   ta: {
+    // Header & Navigation
     "header.title": "சுற்றுலா பாதுகாப்பு டாஷ்போர்டு",
     "header.subtitle": "பாதுகாப்பாகவும் இணைக்கப்பட்டும் இருங்கள்",
     "header.protected": "பாதுகாக்கப்பட்டது",
@@ -892,6 +895,10 @@ const translations = {
     "header.authority.title": "அதிகார கட்டளை மையம்",
     "header.authority.subtitle": "சுற்றுலா பாதுகாப்பு கண்காணிப்பு மற்றும் மறுமொழி அமைப்பு",
     "header.system.operational": "அமைப்பு இயக்கத்தில் உள்ளது",
+    "navigation.profile": "சுயவிவர அமைப்புகள்",
+    "navigation.settings": "வழிசெலுத்தல் அமைப்புகள்",
+
+    // Tabs
     "tabs.dashboard": "டாஷ்போர்டு",
     "tabs.digital_id": "டிஜிட்டல் அடையாளம்",
     "tabs.tracking": "நேரடி கண்காணிப்பு",
@@ -900,8 +907,15 @@ const translations = {
     "tabs.ai_assistant": "AI உதவியாளர்",
     "tabs.profile": "சுயவிவரம்",
     "tabs.safety": "பாதுகாப்பு குறிப்புகள்",
+    "tabs.heatmap": "வெப்ப வரைபடம்",
+    "tabs.tourists": "சுற்றுலாப் பயணிகள்",
     "tabs.alerts": "எச்சரிக்கைகள்",
+    "tabs.ai_systems": "AI அமைப்புகள்",
+    "tabs.analytics": "பகுப்பாய்வு",
+    "tabs.overview": "கண்ணோட்டம்",
     "tabs.ai_anomaly": "AI கண்டறிதல்",
+
+    // Emergency System
     "emergency.title": "அவசர எச்சரிக்கை",
     "emergency.emergency": "அவசரநிலை",
     "emergency.medical": "மருத்துவம்",
@@ -913,23 +927,146 @@ const translations = {
     "emergency.assistance_desc": "பொது உதவி",
     "emergency.send_alert": "எச்சரிக்கை அனுப்பு",
     "emergency.cancel": "ரத்து செய்",
+    "emergency.confirm_title": "அவசர எச்சரிக்கையை உறுதிப்படுத்தவும்",
+    "emergency.confirm_message":
+      "இந்த அவசர எச்சரிக்கையை அனுப்ப விரும்புகிறீர்களா? இது அதிகாரிகள் மற்றும் அவசர சேவைகளுக்கு அறிவிக்கும்.",
+    "emergency.location_sharing": "உங்கள் தற்போதைய இடம் அவசர உதவி குழுவினருடன் பகிரப்படும்.",
     "emergency.alert_sent": "அவசர எச்சரிக்கை வெற்றிகரமாக அனுப்பப்பட்டது!",
     "emergency.alert_error": "அவசர எச்சரிக்கை அனுப்புவதில் தோல்வி. மீண்டும் முயற்சிக்கவும்.",
+
+    // Safety Status
     "status.safe": "பாதுகாப்பானது",
+    "status.alert": "எச்சரிக்கை",
+    "status.tracked": "கண்காணிக்கப்பட்டது",
+    "status.unknown": "தெரியவில்லை",
     "status.online": "ஆன்லைன்",
     "status.offline": "ஆஃப்லைன்",
+    "status.good_level": "நல்ல நிலை",
+    "status.strong_signal": "வலுவான சிக்னல்",
     "status.all_systems_operational": "அனைத்து அமைப்புகளும் இயங்குகின்றன",
+    "status.enable_location": "இருப்பிட சேவைகளை இயக்கவும்",
+
+    // Cards & Metrics
     "cards.safety_status": "பாதுகாப்பு நிலை",
-    "cards.location": "இடம்",
+    "cards.location": "இருப்பிடம்",
     "cards.connection": "இணைப்பு",
     "cards.battery": "பேட்டரி",
+    "cards.active_tourists": "செயலில் உள்ள பயணிகள்",
+    "cards.critical_alerts": "முக்கிய எச்சரிக்கைகள்",
+    "cards.safe_zones": "பாதுகாப்பான மண்டலங்கள்",
+    "cards.response_time": "மறுமொழி நேரம்",
+    "cards.ai_efficiency": "AI செயல்திறன்",
+    "cards.from_yesterday": "நேற்றிலிருந்து",
+    "cards.immediate_response": "உடனடி பதில் தேவை",
+    "cards.all_systems_normal": "அனைத்து அமைப்புகளும் இயல்பாக உள்ளன",
+    "cards.average_emergency": "சராசரி அவசர மறுமொழி",
+    "cards.threat_detection": "அச்சுறுத்தல் கண்டறிதல் துல்லியம்",
+
+    // Quick Actions
     "actions.quick_actions": "விரைவு செயல்கள்",
     "actions.emergency_assistance": "அவசர மற்றும் உதவி விருப்பங்கள்",
+    "actions.call": "அழைக்கவும்",
+    "actions.deploy_team": "பதில் குழுவை அனுப்பவும்",
+    "actions.ai_prioritize": "AI முன்னுரிமை",
+    "actions.resolve": "தீர்க்கவும்",
+    "actions.ai_analysis": "AI பகுப்பாய்வு",
+
+    // Services
+    "services.nearby_emergency": "அருகிலுள்ள அவசர சேவைகள்",
+    "services.important_contacts": "உங்கள் அருகிலுள்ள முக்கிய தொடர்புகள் மற்றும் இடங்கள்",
+    "services.emergency_contacts": "அவசர தொடர்புகள்",
+    "services.immediate_assistance": "உடனடி உதவிக்கான முக்கியமான தொலைபேசி எண்கள்",
+    "services.emergency_services": "அவசர சேவைகள்",
+    "services.tourist_police": "சுற்றுலா காவல்",
+    "services.embassy": "தூதரகம்",
+    "services.medical_hotline": "மருத்துவ உதவி எண்",
+
+    // Safety Tips
     "safety.tips_title": "பாதுகாப்பு குறிப்புகள் & வழிகாட்டுதல்கள்",
     "safety.tips_desc": "சுற்றுலாப் பயணிகளுக்கான முக்கியமான பாதுகாப்பு தகவல்",
+    "safety.local_emergency": "உள்ளூர் அவசர தகவல்",
+    "safety.local_emergency_desc": "இந்த இடத்திற்கான முக்கியமான எண்கள் மற்றும் நடைமுறைகள்",
+    "safety.emergency_numbers": "அவசர எண்கள்",
+    "safety.what_to_do": "அவசரநிலையில் என்ன செய்ய வேண்டும்",
+    "safety.tip_1": "உங்கள் தொலைபேசியை எப்போதும் சார்ஜ் செய்து வையுங்கள்",
+    "safety.tip_2": "உங்கள் பயண திட்டத்தை குடும்பத்தினர் அல்லது நண்பர்களுடன் பகிருங்கள்",
+    "safety.tip_3": "இரவில் வெளிச்சமான, மக்கள் நடமாட்டம் உள்ள பகுதிகளில் இருங்கள்",
+    "safety.tip_4": "முக்கிய ஆவணங்களின் நகல்களை கையில் வைத்திருக்கவும்",
+    "safety.tip_5": "அடிப்படை உள்ளூர் அவசர சொற்களைக் கற்றுக்கொள்ளுங்கள்",
+    "safety.step_1": "அமைதியாக இருங்கள் மற்றும் சூழ்நிலையைக் கவனியுங்கள்",
+    "safety.step_2": "இந்த செயலியில் உள்ள அவசர எச்சரிக்கை பொத்தானைப் பயன்படுத்தவும்",
+    "safety.step_3": "தேவைப்பட்டால் உள்ளூர் அவசர சேவைகளைத் தொடர்பு கொள்ளவும்",
+    "safety.step_4": "உங்கள் இருப்பிடத்தை அதிகாரிகளுடன் பகிரவும்",
+    "safety.step_5": "அவசரப் பணியாளர்களின் வழிகாட்டுதல்களைப் பின்பற்றவும்",
+
+    // Digital ID
+    "digital_id.title": "டிஜிட்டல் சுற்றுலா ID",
+    "digital_id.desc": "பாதுகாப்பான பயணத்திற்கான பிளாக்செயின் சரிபார்க்கப்பட்ட டிஜிட்டல் அடையாளம்",
+    "digital_id.generate_new": "புதிய டிஜிட்டல் ID உருவாக்கவும்",
+    "digital_id.blockchain_id": "பிளாக்செயின் ID",
+    "digital_id.registration_date": "பதிவு தேதி",
+    "digital_id.verified_tourist": "சரிபார்க்கப்பட்ட சுற்றுலாப் பயணி",
+
+    // Profile
+    "profile.title": "சுற்றுலா சுயவிவரம்",
+    "profile.desc": "உங்கள் பாதுகாப்பு சுயவிவரம் மற்றும் பிளாக்செயின் அடையாளம்",
+    "profile.safety_status": "பாதுகாப்பு நிலை",
+    "profile.active_safe": "செயலில் & பாதுகாப்பானது",
+    "profile.last_checkin": "கடைசி செக்-இன்",
+    "profile.just_now": "சற்று முன்",
+
+    // AI Assistant
+    "ai.title": "AI பாதுகாப்பு உதவியாளர்",
+    "ai.desc": "செயற்கை நுண்ணறிவின் தனிப்பயனாக்கப்பட்ட பாதுகாப்பு நுண்ணறிவுகள் மற்றும் பரிந்துரைகளைப் பெறுங்கள்",
+    "ai.how_keeps_safe": "AI உங்களை எவ்வாறு பாதுகாப்பாக வைத்திருக்கிறது",
+    "ai.predictive_analysis": "முன்னறிவிப்பு பகுப்பாய்வு",
+    "ai.predictive_desc": "சாத்தியமான அபாயங்கள் நிகழும் முன் AI முன்கூட்டியே கணிக்கிறது",
+    "ai.realtime_monitoring": "நிகழ்நேர கண்காணிப்பு",
+    "ai.realtime_desc": "உங்கள் பாதுகாப்பு நிலை மற்றும் இருப்பிடத்தின் தொடர்ச்சியான கண்காணிப்பு",
+    "ai.personalized_recommendations": "தனிப்பயனாக்கப்பட்ட பரிந்துரைகள்",
+    "ai.personalized_desc": "உங்கள் சுயவிவரம் மற்றும் இருப்பிடத்தின் அடிப்படையில் வடிவமைக்கப்பட்ட பாதுகாப்பு ஆலோசனை",
+    "ai.automated_alerts": "தானியங்கி எச்சரிக்கைகள்",
+    "ai.automated_desc": "உங்கள் நடத்தையிலிருந்து கற்றுக்கொள்ளும் புத்திசாலித்தனமான எச்சரிக்கை அமைப்பு",
+
+    // Heatmap
+    "heatmap.title": "சுற்றுலா பாதுகாப்பு வெப்ப வரைபடம்",
+    "heatmap.desc": "சுற்றுலா மண்டலங்கள் முழுவதும் நிகழ்நேர ஆபத்து மதிப்பீடு",
+    "heatmap.all": "அனைத்தும்",
+    "heatmap.high_risk": "அதிக ஆபத்து",
+    "heatmap.medium": "நடுத்தர ஆபத்து",
+    "heatmap.low_risk": "குறைந்த ஆபத்து",
+    "heatmap.zone_details": "மண்டல விவரங்கள்",
+    "heatmap.select_zone": "விவரங்களைக் காண ஒரு மண்டலத்தைத் தேர்ந்தெடுக்கவும்",
+    "heatmap.active_tourists": "செயலில் உள்ள சுற்றுலாப் பயணிகள்",
+    "heatmap.incidents_today": "இன்றைய சம்பவங்கள்",
+    "heatmap.coordinates": "ஒருங்கிணைப்புகள்",
+    "heatmap.last_incident": "கடைசி சம்பவம்",
+    "heatmap.high_risk_zones": "அதிக ஆபத்து மண்டலங்கள்",
+    "heatmap.medium_risk_zones": "நடுத்தர ஆபத்து மண்டலங்கள்",
+    "heatmap.safe_zones": "பாதுகாப்பான மண்டலங்கள்",
+    "heatmap.total_tourists": "மொத்த சுற்றுலாப் பயணிகள்",
+
+    // Tracking & Geofence
+    "tracking.title": "நேரடி ஜிபிஎஸ் கண்காணிப்பு",
+    "tracking.subtitle": "நிகழ்நேர இருப்பிட கண்காணிப்பு மற்றும் பாதுகாப்பு மண்டலங்கள்",
+    "tracking.currentLocation": "தற்போதைய இடம்",
+    "alerts.geoFence": "புவி வேலி எச்சரிக்கைகள்",
+
+    // Common
     "common.loading": "ஏற்றுகிறது...",
+    "common.error": "பிழை",
+    "common.success": "வெற்றி",
+    "common.warning": "எச்சரிக்கை",
+    "common.info": "தகவல்",
+    "common.close": "மூடு",
     "common.save": "சேமி",
     "common.cancel": "ரத்து",
+    "common.confirm": "உறுதிப்படுத்து",
+    "common.yes": "ஆம்",
+    "common.no": "இல்லை",
+    "common.ok": "சரி",
+    "common.view": "அனைத்தையும் காட்டு",
+    "common.search": "தேடு",
     "common.loading_dashboard": "டாஷ்போர்டு ஏற்றுகிறது...",
   },
   hi: {

@@ -637,6 +637,7 @@ useEffect(() => {
               className="px-3 py-1 border border-gray-200 rounded-md text-sm bg-gray-50 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="en">🇺🇸 English</option>
+              <option value="ta">🇮🇳 தமிழ்</option>
               <option value="ml">ML Malayalam</option>
               <option value="tl">Tl Telugu</option>
               <option value="es">🇪🇸 Español</option>

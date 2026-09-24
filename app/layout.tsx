@@ -66,8 +66,12 @@ export default function RootLayout({
         <title>Tourist Safety System</title>
         <meta name="description" content="Advanced tourist safety monitoring and emergency response system" />
         <meta name="generator" content="v0.app" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#000000" />
+        <meta name="theme-color" content="#2563eb" />
       </head>
       <body>
         <Suspense fallback={null}>

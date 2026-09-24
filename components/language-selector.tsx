@@ -9,11 +9,12 @@ import { useLanguage, type Language } from "@/contexts/language-context"
 
 const languages = [
   { code: "en" as Language, name: "English", flag: "🇺🇸" },
+  { code: "ta" as Language, name: "தமிழ்", flag: "🇮🇳" },
+  { code: "hi" as Language, name: "हिन्दी", flag: "🇮🇳" },
   { code: "es" as Language, name: "Español", flag: "🇪🇸" },
   { code: "fr" as Language, name: "Français", flag: "🇫🇷" },
   { code: "de" as Language, name: "Deutsch", flag: "🇩🇪" },
   { code: "zh" as Language, name: "中文", flag: "🇨🇳" },
-  { code: "hi" as Language, name: "हिन्दी", flag: "🇮🇳" },
 ]
 
 interface LanguageSelectorProps {

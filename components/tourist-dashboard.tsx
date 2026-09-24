@@ -589,7 +589,7 @@ export function TouristDashboard() {
               <Shield className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-white font-bold text-sm leading-tight">{t("header.title") || "Tourist Safety"}</h2>
+              <h2 className="text-white font-bold text-base leading-tight">Safaris</h2>
               <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">{t("header.system.operational")}</span>
             </div>
           </div>
@@ -611,7 +611,7 @@ export function TouristDashboard() {
               ...(isVerified ? [
                 { id: "ai-anomaly", label: t("tabs.ai_anomaly"), icon: <Clock className="h-4 w-4" /> },
               ] : []),
-              { id: "profile", label: t("navigation.settings") || "Settings", icon: <Settings className="h-4 w-4" /> },
+              { id: "profile", label: t("navigation.settings") || "Navigation Settings", icon: <Settings className="h-4 w-4" /> },
             ].map((item) => {
               const isActive = activeTab === item.id
 
@@ -761,14 +761,16 @@ export function TouristDashboard() {
                     </div>
                     
                     <button
+                      id="profile-dropdown-navigation-settings"
+                      data-testid="navigation-profile"
                       onClick={() => {
-                        setShowProfileModal(true);
+                        setActiveTab("profile");
                         setIsProfileDropdownOpen(false);
                       }}
                       className="w-full flex items-center space-x-2 px-3 py-2 text-left text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
                     >
                       <Settings className="h-3.5 w-3.5" />
-                      <span>{t("navigation.profile") || "Edit Profile"}</span>
+                      <span>{t("navigation.profile") || "navigation.profile"}</span>
                     </button>
                     
                     <button
@@ -1728,7 +1730,7 @@ export function TouristDashboard() {
           {activeTab === "profile" && (
             <Card className="bg-white border-gray-200 max-w-3xl mx-auto shadow-sm animate-in fade-in duration-200">
               <CardHeader>
-                <CardTitle className="text-gray-800">{t("profile.title")}</CardTitle>
+                <CardTitle className="text-gray-800">{t("navigation.settings") || t("profile.title") || "Navigation Settings"}</CardTitle>
                 <CardDescription>{t("profile.desc")}</CardDescription>
               </CardHeader>
               <CardContent className="p-6">

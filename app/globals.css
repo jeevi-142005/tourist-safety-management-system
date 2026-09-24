@@ -198,4 +198,17 @@
       transform: translateY(0);
     }
   }
+
+  /* Tamil Language Typography & Layout Stability */
+  html[lang="ta"], [lang="ta"] {
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  html[lang="ta"] .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
+
