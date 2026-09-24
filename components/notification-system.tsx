@@ -23,12 +23,18 @@ interface Notification {
 export function NotificationSystem() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isOpen, setIsOpen] = useState(false)
-  const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [isOnline, setIsOnline] = useState(true)
   const { activeAlerts } = useAlerts()
   const { user } = useAuth()
   const audioContextRef = useRef<AudioContext | null>(null)
   const channelRef = useRef<BroadcastChannel | null>(null)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsOnline(navigator.onLine)
+    }
+  }, [])
 
   useEffect(() => {
     if (user?.role === "admin") {
@@ -60,7 +66,6 @@ export function NotificationSystem() {
   }, [])
 
   const startOfflineAlertPolling = () => {
-    // Poll localStorage every 500ms for new offline alerts
     pollingRef.current = setInterval(() => {
       const newAlert = localStorage.getItem('newOfflineAlert')
       if (newAlert) {
@@ -72,11 +77,10 @@ export function NotificationSystem() {
           console.error('Error processing offline alert:', error)
         }
       }
-    }, 500)
+    }, 1000)
   }
 
   const setupDirectAlertReceiver = () => {
-    // BroadcastChannel for same session
     channelRef.current = new BroadcastChannel('emergency-direct')
     channelRef.current.onmessage = (event) => {
       if (event.data.type === 'OFFLINE_EMERGENCY_NOW') {
@@ -84,7 +88,6 @@ export function NotificationSystem() {
       }
     }
 
-    // Custom event for same page
     const handleDirectAlert = (event: CustomEvent) => {
       receiveDirectAlert(event.detail)
     }
@@ -96,18 +99,10 @@ export function NotificationSystem() {
   }
 
   const receiveDirectAlert = (alertData: any) => {
-    // Check if already processed
-    const existingNotification = notifications.find(n => n.id === `direct-${alertData.id}`)
-    if (existingNotification) return
-
-    console.log("Raw alert data received:", JSON.stringify(alertData, null, 2))
-
-    // More robust location checking
     let locationStr = 'Not available'
     let lat = null
     let lng = null
 
-    // Check all possible location field combinations
     if (alertData.location_lat !== undefined && alertData.location_lat !== null && 
         alertData.location_lng !== undefined && alertData.location_lng !== null) {
       lat = Number(alertData.location_lat)
@@ -118,12 +113,9 @@ export function NotificationSystem() {
       lng = Number(alertData.lng)
     }
 
-    // Format location if we have valid coordinates
     if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
       locationStr = `${lat.toFixed(4)}, ${lng.toFixed(4)}`
     }
-
-    console.log("Processed location:", { lat, lng, locationStr })
 
     const notification: Notification = {
       id: `direct-${alertData.id}`,
@@ -138,30 +130,22 @@ export function NotificationSystem() {
       location: locationStr
     }
 
-    console.log("Final notification:", notification)
-
-    setNotifications(prev => [notification, ...prev].slice(0, 50))
+    setNotifications(prev => {
+      if (prev.some(n => n.id === notification.id)) return prev
+      return [notification, ...prev].slice(0, 50)
+    })
     
-    // Save to tourist dashboard section
     saveToTouristDashboard(alertData, locationStr)
-    
-    // Immediate audio alert
     playDirectAlertSound()
-    
-    // Auto-open notification panel
     setIsOpen(true)
   }
 
   const saveToTouristDashboard = (alertData: any, locationStr: string) => {
     try {
-      // Get existing tourist data from localStorage
       const existingTourists = JSON.parse(localStorage.getItem('adminTouristData') || '[]')
-      
-      // Find or create tourist entry
       let touristIndex = existingTourists.findIndex((t: any) => t.user_id === alertData.user_id)
       
       if (touristIndex === -1) {
-        // Create new tourist entry
         const newTourist = {
           user_id: alertData.user_id,
           name: alertData.user_name,
@@ -178,7 +162,6 @@ export function NotificationSystem() {
         touristIndex = existingTourists.length - 1
       }
       
-      // Add alert to tourist's offline alerts
       const alertEntry = {
         id: alertData.id,
         type: alertData.type,
@@ -192,26 +175,19 @@ export function NotificationSystem() {
         acknowledged: false
       }
       
-      // Update tourist data
       existingTourists[touristIndex].status = 'emergency'
       existingTourists[touristIndex].location = locationStr
       existingTourists[touristIndex].location_lat = alertData.location_lat
       existingTourists[touristIndex].location_lng = alertData.location_lng
       existingTourists[touristIndex].last_seen = alertData.created_at || new Date().toISOString()
       
-      // Add to offline alerts array
       if (!existingTourists[touristIndex].offline_alerts) {
         existingTourists[touristIndex].offline_alerts = []
       }
       existingTourists[touristIndex].offline_alerts.unshift(alertEntry)
-      
-      // Keep only latest 20 offline alerts per tourist
       existingTourists[touristIndex].offline_alerts = existingTourists[touristIndex].offline_alerts.slice(0, 20)
       
-      // Save back to localStorage
       localStorage.setItem('adminTouristData', JSON.stringify(existingTourists))
-      
-      console.log("Alert saved to tourist dashboard:", alertEntry)
     } catch (error) {
       console.error("Failed to save alert to tourist dashboard:", error)
     }
@@ -224,8 +200,6 @@ export function NotificationSystem() {
       }
       
       const audioContext = audioContextRef.current
-      
-      // Immediate urgent sound
       const oscillator = audioContext.createOscillator()
       const gainNode = audioContext.createGain()
 
@@ -245,7 +219,7 @@ export function NotificationSystem() {
   }
 
   useEffect(() => {
-    if (user?.role === "admin") {
+    if (user?.role === "admin" && activeAlerts && activeAlerts.length > 0) {
       const alertNotifications: Notification[] = activeAlerts.map((alert) => ({
         id: `alert-${alert.id}`,
         type: "alert" as const,
@@ -253,13 +227,14 @@ export function NotificationSystem() {
         message: `${alert.touristName}: ${alert.message}`,
         timestamp: alert.timestamp,
         read: false,
-        alertType: alert.type,
+        alertType: alert.type as any,
         priority: alert.severity === 'critical' ? 'critical' : 'high'
       }))
 
       setNotifications((prev) => {
-        const existingIds = prev.map((n) => n.id)
-        const newNotifications = alertNotifications.filter((n) => !existingIds.includes(n.id))
+        const existingIds = new Set(prev.map((n) => n.id))
+        const newNotifications = alertNotifications.filter((n) => !existingIds.has(n.id))
+        if (newNotifications.length === 0) return prev
         return [...newNotifications, ...prev].slice(0, 50)
       })
     }

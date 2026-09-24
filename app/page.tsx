@@ -11,7 +11,7 @@ import { AIFeaturesSection } from "@/components/ai-features-section"
 import { CTASection } from "@/components/cta-section"
 import { Footer } from "@/components/footer"
 import { LoginSelection } from "@/components/login-selection"
-import { AdminDashboard } from "@/components/admin-dashboard"
+import AdminDashboardClient from "@/app/admin/admin-client"
 import { TouristDashboard } from "@/components/tourist-dashboard"
 import { LoadingSpinner } from "@/components/loading-spinner"
 
@@ -32,7 +32,7 @@ export default function HomePage() {
   }
 
   if (user.role === "admin") {
-    return <AdminDashboard />
+    return <AdminDashboardClient />
   }
 
   if (user.role === "tourist") {

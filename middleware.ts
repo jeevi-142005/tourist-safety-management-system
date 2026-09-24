@@ -11,7 +11,7 @@ export async function middleware(request: NextRequest) {
 
     const { pathname } = request.nextUrl
 
-    // If there is no token and the user is attempting to access a protected route
+    // Redirect unauthenticated users to home
     if (
       pathname !== "/" &&
       !token &&
@@ -20,6 +20,13 @@ export async function middleware(request: NextRequest) {
       !pathname.startsWith("/_next") &&
       !pathname.includes(".")
     ) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/"
+      return NextResponse.redirect(url)
+    }
+
+    // Protect admin routes — only allow role=admin
+    if (pathname.startsWith("/admin") && token && (token as any).role !== "admin") {
       const url = request.nextUrl.clone()
       url.pathname = "/"
       return NextResponse.redirect(url)

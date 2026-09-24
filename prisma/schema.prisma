@@ -282,6 +282,8 @@ model TouristId {
   emergencyContactPhone String?  @map("emergency_contact_phone")
   tripStartDate         DateTime? @map("trip_start_date")
   tripEndDate           DateTime? @map("trip_end_date")
+  suspendedAt           DateTime? @map("suspended_at")
+  suspendedReason       String?   @map("suspended_reason")
 }
 
 model BlockchainLog {
@@ -315,6 +317,32 @@ model AiAnalysis {
   threatLevel  String?  @map("threat_level")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
+}
+
+model EmergencyResource {
+  id           String            @id @default(uuid())
+  name         String
+  type         String            // "hospital", "ambulance", "security", "fire", "police"
+  phone        String?
+  email        String?
+  address      String?
+  latitude     Float?
+  longitude    Float?
+  isAvailable  Boolean           @default(true)
+  notes        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  assignments  AlertAssignment[]
+}
+
+model AlertAssignment {
+  id           String            @id @default(uuid())
+  alertId      String            @map("alert_id")
+  resourceId   String            @map("resource_id")
+  resource     EmergencyResource @relation(fields: [resourceId], references: [id])
+  assignedAt   DateTime          @default(now()) @map("assigned_at")
+  notes        String?
+  status       String            @default("assigned") // "assigned", "en_route", "on_scene", "completed"
 }
 
 
