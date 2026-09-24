@@ -43,6 +43,7 @@ import { LiveTrackingMap } from "./live-tracking-map"
 import { EnhancedEmergencySystem } from "./enhanced-emergency-system"
 import { AIAnomalyDetector } from "./ai-anomaly-detector"
 import { AISafetyAdvisor } from "./ai-safety-advisor"
+import { OfflineSafetyPanel } from "./offline-safety-panel"
 import { createBrowserClient } from "@/lib/db-client/client"
 
 export function TouristDashboard() {
@@ -611,6 +612,7 @@ export function TouristDashboard() {
               ...(isVerified ? [
                 { id: "ai-anomaly", label: t("tabs.ai_anomaly"), icon: <Clock className="h-4 w-4" /> },
               ] : []),
+              { id: "offline", label: t("tabs.offline") || "Offline Safety", icon: <WifiOff className="h-4 w-4" /> },
               { id: "profile", label: t("navigation.settings") || "Settings", icon: <Settings className="h-4 w-4" /> },
             ].map((item) => {
               const isActive = activeTab === item.id
@@ -1722,6 +1724,13 @@ export function TouristDashboard() {
               <AIAnomalyDetector />
             </div>
             ) : renderVerifyPrompt()
+          )}
+
+          {/* TAB 9.5: OFFLINE SAFETY */}
+          {activeTab === "offline" && (
+            <div className="animate-in fade-in duration-200 space-y-6">
+              <OfflineSafetyPanel userId={user?.id} />
+            </div>
           )}
 
           {/* TAB 10: SETTINGS / PROFILE DETAILS */}

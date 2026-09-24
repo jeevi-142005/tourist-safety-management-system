@@ -69,8 +69,26 @@ export default function AdminDashboardClient() {
     const [searchTerm, setSearchTerm] = useState("")
     const [statusFilter, setStatusFilter] = useState<string>("all")
     const [isLoggingOut, setIsLoggingOut] = useState(false)
+    const [isSimulatingSMS, setIsSimulatingSMS] = useState(false)
 
     const [activeTab, setActiveTab] = useState("tourists")
+
+    const simulateTwilioSMS = async () => {
+        try {
+            setIsSimulatingSMS(true)
+            const res = await fetch("/api/admin/simulate-twilio", { method: "POST" })
+            if (res.ok) {
+                await fetchDashboardData()
+                alert("Twilio SMS Webhook simulated successfully. Alert created.")
+            } else {
+                alert("Simulation failed.")
+            }
+        } catch (error) {
+            console.error("Simulation error:", error)
+        } finally {
+            setIsSimulatingSMS(false)
+        }
+    }
 
     const handleLogout = async () => {
         try {
@@ -253,6 +271,17 @@ export default function AdminDashboardClient() {
                             <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></div>
                             <span className="text-xs text-emerald-700 font-medium">System Operational</span>
                         </div>
+                        <Button 
+                            onClick={simulateTwilioSMS} 
+                            disabled={isSimulatingSMS}
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800"
+                            title="Simulates receiving an SMS from a tourist without internet via Twilio"
+                        >
+                            <MessageSquare className="h-3.5 w-3.5 mr-2" />
+                            {isSimulatingSMS ? "Simulating..." : "Simulate Offline SMS"}
+                        </Button>
                         <Button onClick={fetchDashboardData} variant="outline" size="sm" className="h-8">
                             <RefreshCw className="h-3.5 w-3.5 mr-2" />
                             Refresh
