@@ -18,6 +18,9 @@ const languages = [
   { code: "ja" as Language, name: "日本語", flag: "🇯🇵" },
   { code: "ko" as Language, name: "한국어", flag: "🇰🇷" },
   { code: "ar" as Language, name: "العربية", flag: "🇸🇦" },
+  { code: "ta" as Language, name: "தமிழ்", flag: "🇮🇳" },
+  { code: "hi" as Language, name: "हिन्दी", flag: "🇮🇳" },
+  { code: "te" as Language, name: "తెలుగు", flag: "🇮🇳" },
 ]
 
 interface LanguageSelectorProps {

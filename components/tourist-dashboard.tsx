@@ -478,23 +478,23 @@ export function TouristDashboard() {
               <Shield className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-white font-bold text-sm leading-tight">Tourist Safety</h2>
-              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Management System</span>
+              <h2 className="text-white font-bold text-sm leading-tight">{t("header.title") || "Tourist Safety"}</h2>
+              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">{t("header.system.operational")}</span>
             </div>
           </div>
 
           {/* Sidebar Menu items */}
           <nav className="space-y-1">
             {[
-              { id: "dashboard", label: "Dashboard", icon: <Navigation className="h-4 w-4" /> },
-              { id: "alerts", label: "Alerts", icon: <Bell className="h-4 w-4" />, badge: unreadAlerts },
-              { id: "tracking", label: "Live Tracking", icon: <MapPin className="h-4 w-4" /> },
-              { id: "digital-id", label: "Digital ID", icon: <User className="h-4 w-4" /> },
-              { id: "emergency", label: "Emergency+", icon: <Zap className="h-4 w-4" /> },
-              { id: "safety", label: "Safety Tips", icon: <Shield className="h-4 w-4" /> },
-              { id: "ai-assistant", label: "AI Safety Panel", icon: <Brain className="h-4 w-4" /> },
-              { id: "ai-anomaly", label: "Reports", icon: <Clock className="h-4 w-4" /> },
-              { id: "profile", label: "Settings", icon: <Settings className="h-4 w-4" /> },
+              { id: "dashboard", label: t("tabs.dashboard"), icon: <Navigation className="h-4 w-4" /> },
+              { id: "alerts", label: t("tabs.alerts"), icon: <Bell className="h-4 w-4" />, badge: unreadAlerts },
+              { id: "tracking", label: t("tabs.tracking"), icon: <MapPin className="h-4 w-4" /> },
+              { id: "digital-id", label: t("tabs.digital_id"), icon: <User className="h-4 w-4" /> },
+              { id: "emergency", label: t("tabs.emergency"), icon: <Zap className="h-4 w-4" /> },
+              { id: "safety", label: t("tabs.safety"), icon: <Shield className="h-4 w-4" /> },
+              { id: "ai-assistant", label: t("tabs.ai_assistant"), icon: <Brain className="h-4 w-4" /> },
+              { id: "ai-anomaly", label: t("tabs.ai_anomaly"), icon: <Clock className="h-4 w-4" /> },
+              { id: "profile", label: t("navigation.settings") || "Settings", icon: <Settings className="h-4 w-4" /> },
             ].map((item) => {
               const isActive = activeTab === item.id
 
@@ -529,8 +529,8 @@ export function TouristDashboard() {
         <div className="space-y-4">
           {/* Glowing SOS Alert Authority Panel */}
           <div className="bg-gradient-to-br from-red-950/60 to-red-900/40 border border-red-500/30 rounded-xl p-4 text-center space-y-3 shadow-lg shadow-red-950/30">
-            <div className="text-white font-bold text-sm tracking-wide">Emergency SOS</div>
-            <p className="text-[10px] text-red-300 leading-normal">Tap to Alert Authorities</p>
+            <div className="text-white font-bold text-sm tracking-wide">{t("emergency.title")}</div>
+            <p className="text-[10px] text-red-300 leading-normal">{t("emergency.send_alert")}</p>
             
             <div className="flex justify-center">
               <button 
@@ -540,7 +540,7 @@ export function TouristDashboard() {
                 <Phone className="h-6 w-6 text-white" />
               </button>
             </div>
-            <span className="text-[9px] text-gray-500 block">Your location will be shared</span>
+            <span className="text-[9px] text-gray-500 block">{t("emergency.location_sharing")}</span>
           </div>
 
           {/* Profile Badge */}
@@ -571,15 +571,18 @@ export function TouristDashboard() {
         {/* HEADER */}
         <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Welcome back, {user?.name || "Jeevika"}! 👋</h1>
-            <p className="text-xs text-gray-500 mt-0.5">Here's what's happening with your safety today.</p>
+            <h1 className="text-xl font-bold text-gray-900">{t("header.title")} 👋</h1>
+            <p className="text-xs text-gray-500 mt-0.5">{t("header.subtitle")}</p>
           </div>
 
           <div className="flex items-center space-x-3">
+            {/* Language Selector */}
+            <LanguageSelector variant="dropdown" />
+
             {/* Protected Pill */}
             <Badge className="bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-50 flex items-center space-x-1.5 py-1 px-2.5 rounded-full font-medium text-xs">
               <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-              <span>Protected</span>
+              <span>{t("header.protected")}</span>
             </Badge>
 
 
@@ -609,7 +612,7 @@ export function TouristDashboard() {
                   ></div>
                   <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 z-40 animate-in fade-in slide-in-from-top-1 duration-150">
                     <div className="px-3 py-1.5 border-b border-gray-100">
-                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Signed in as</p>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">{t("profile.title")}</p>
                       <p className="text-xs font-semibold text-gray-800 truncate">{user?.name || "Jeevika"}</p>
                       <p className="text-[10px] text-gray-500 truncate">{user?.email}</p>
                     </div>
@@ -622,7 +625,7 @@ export function TouristDashboard() {
                       className="w-full flex items-center space-x-2 px-3 py-2 text-left text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
                     >
                       <Settings className="h-3.5 w-3.5" />
-                      <span>Edit Profile</span>
+                      <span>{t("navigation.profile") || "Edit Profile"}</span>
                     </button>
                     
                     <button
@@ -633,7 +636,7 @@ export function TouristDashboard() {
                       className="w-full flex items-center space-x-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-750 transition-colors border-t border-gray-100"
                     >
                       <LogOut className="h-3.5 w-3.5" />
-                      <span>Logout</span>
+                      <span>{t("header.logout")}</span>
                     </button>
                   </div>
                 </>
@@ -656,9 +659,9 @@ export function TouristDashboard() {
                 <Card className="bg-white border-gray-200/80 shadow-sm hover:shadow-md transition-shadow">
                   <CardContent className="p-4 flex items-center justify-between">
                     <div className="space-y-1">
-                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Safety Status</span>
-                      <h3 className="text-2xl font-bold text-emerald-500">Safe</h3>
-                      <p className="text-[10px] text-gray-400">All systems operational</p>
+                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">{t("cards.safety_status")}</span>
+                      <h3 className="text-2xl font-bold text-emerald-500">{t("status.safe")}</h3>
+                      <p className="text-[10px] text-gray-400">{t("status.all_systems_operational")}</p>
                     </div>
                     {/* Tiny line chart pulse SVG */}
                     <div className="flex items-center space-x-3">
@@ -677,7 +680,7 @@ export function TouristDashboard() {
                 <Card className="bg-white border-gray-200/80 shadow-sm hover:shadow-md transition-shadow">
                   <CardContent className="p-4 flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Location</span>
+                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">{t("cards.location")}</span>
                       <h3 className="text-base font-bold text-gray-800 truncate max-w-[130px]" title={currentLocation ? locationName : "Locating..."}>
                         {locationName}
                       </h3>
@@ -688,7 +691,7 @@ export function TouristDashboard() {
                         onClick={() => setActiveTab("tracking")}
                         className="text-[10px] text-blue-600 font-semibold flex items-center space-x-0.5 hover:underline mt-1"
                       >
-                        <span>View on Map</span>
+                        <span>{t("tracking.currentLocation") || t("tabs.tracking")}</span>
                         <ChevronRight className="h-3 w-3" />
                       </button>
                     </div>
@@ -702,9 +705,9 @@ export function TouristDashboard() {
                 <Card className="bg-white border-gray-200/80 shadow-sm hover:shadow-md transition-shadow">
                   <CardContent className="p-4 flex items-center justify-between">
                     <div className="space-y-1">
-                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Connection</span>
-                      <h3 className="text-2xl font-bold text-indigo-500">{isOnline ? "Online" : "Offline"}</h3>
-                      <p className="text-[10px] text-gray-400">{isOnline ? "Strong signal" : "Offline"}</p>
+                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">{t("cards.connection")}</span>
+                      <h3 className="text-2xl font-bold text-indigo-500">{isOnline ? t("status.online") : t("status.offline")}</h3>
+                      <p className="text-[10px] text-gray-400">{isOnline ? t("status.strong_signal") : t("status.offline")}</p>
                     </div>
                     {/* Signal bars SVG */}
                     <div className="flex items-center space-x-3">
@@ -725,9 +728,9 @@ export function TouristDashboard() {
                 <Card className="bg-white border-gray-200/80 shadow-sm hover:shadow-md transition-shadow">
                   <CardContent className="p-4 flex items-center justify-between">
                     <div className="space-y-1">
-                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Battery</span>
+                      <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">{t("cards.battery")}</span>
                       <h3 className="text-2xl font-bold text-emerald-500">{batteryLevel}</h3>
-                      <p className="text-[10px] text-gray-400">{batteryCharging ? "Charging" : "Good level"}</p>
+                      <p className="text-[10px] text-gray-400">{batteryCharging ? t("common.loading") || "Charging" : t("status.good_level")}</p>
                     </div>
                     {/* Radial battery progress ring */}
                     <div className="flex items-center space-x-3">
@@ -749,8 +752,8 @@ export function TouristDashboard() {
               {/* QUICK ACTIONS SECTION */}
               <Card className="bg-white border-gray-200/80 shadow-sm">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-bold text-gray-800 uppercase tracking-wide">Quick Actions</CardTitle>
-                  <CardDescription className="text-xs text-gray-400">Choose an option to get immediate help</CardDescription>
+                  <CardTitle className="text-sm font-bold text-gray-800 uppercase tracking-wide">{t("actions.quick_actions")}</CardTitle>
+                  <CardDescription className="text-xs text-gray-400">{t("actions.emergency_assistance")}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -759,8 +762,8 @@ export function TouristDashboard() {
                     <EmergencyAlert
                       type="emergency"
                       icon={<AlertTriangle className="h-5 w-5 mr-2" />}
-                      label="Emergency"
-                      description="Immediate help response"
+                      label={t("emergency.emergency")}
+                      description={t("emergency.emergency_desc")}
                       className="bg-transparent hover:bg-red-50 text-red-600 border border-red-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
                     />
 
@@ -768,8 +771,8 @@ export function TouristDashboard() {
                     <EmergencyAlert
                       type="medical"
                       icon={<Heart className="h-5 w-5 mr-2" />}
-                      label="Medical"
-                      description="Health assistance"
+                      label={t("emergency.medical")}
+                      description={t("emergency.medical_desc")}
                       className="bg-transparent hover:bg-orange-50 text-orange-600 border border-orange-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
                     />
 
@@ -777,8 +780,8 @@ export function TouristDashboard() {
                     <EmergencyAlert
                       type="security"
                       icon={<Shield className="h-5 w-5 mr-2" />}
-                      label="Security"
-                      description="Report any incident"
+                      label={t("emergency.security")}
+                      description={t("emergency.security_desc")}
                       className="bg-transparent hover:bg-yellow-50 text-yellow-600 border border-yellow-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
                     />
 
@@ -786,8 +789,8 @@ export function TouristDashboard() {
                     <EmergencyAlert
                       type="assistance"
                       icon={<HelpCircle className="h-5 w-5 mr-2" />}
-                      label="Assistance"
-                      description="General travel support"
+                      label={t("emergency.assistance")}
+                      description={t("emergency.assistance_desc")}
                       className="bg-transparent hover:bg-blue-50 text-blue-600 border border-blue-200 font-semibold py-5 rounded-xl justify-between flex w-full transition-colors group"
                     />
                   </div>
@@ -804,8 +807,8 @@ export function TouristDashboard() {
                   <Card className="bg-white border-gray-200/80 shadow-sm overflow-hidden">
                     <CardHeader className="pb-2 flex flex-row items-center justify-between">
                       <div>
-                        <CardTitle className="text-sm font-bold text-gray-800">Live Location</CardTitle>
-                        <CardDescription className="text-xs text-gray-400">Real-time geofence tracking map</CardDescription>
+                        <CardTitle className="text-sm font-bold text-gray-800">{t("tracking.title")}</CardTitle>
+                        <CardDescription className="text-xs text-gray-400">{t("tracking.subtitle")}</CardDescription>
                       </div>
                       <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border border-emerald-200">
                         ● Live
@@ -861,11 +864,11 @@ export function TouristDashboard() {
                   <Card className="bg-white border-gray-200/80 shadow-sm">
                     <CardHeader className="pb-3 flex flex-row items-center justify-between">
                       <div>
-                        <CardTitle className="text-sm font-bold text-gray-800">Nearby Services</CardTitle>
-                        <CardDescription className="text-xs text-gray-400">Emergency support units around you</CardDescription>
+                        <CardTitle className="text-sm font-bold text-gray-800">{t("services.nearby_emergency")}</CardTitle>
+                        <CardDescription className="text-xs text-gray-400">{t("services.important_contacts")}</CardDescription>
                       </div>
                       <button onClick={() => setActiveTab("safety")} className="text-xs text-blue-600 font-semibold hover:underline">
-                        View All
+                        {t("common.view") || "View All"}
                       </button>
                     </CardHeader>
                     <CardContent className="p-4 pt-0">
@@ -896,18 +899,18 @@ export function TouristDashboard() {
                   <Card className="bg-white border-gray-200/80 shadow-sm">
                     <CardHeader className="pb-3 flex flex-row items-center justify-between">
                       <div>
-                        <CardTitle className="text-sm font-bold text-gray-800">Recent Alerts</CardTitle>
-                        <CardDescription className="text-xs text-gray-400">Local emergency broadcast feeds</CardDescription>
+                        <CardTitle className="text-sm font-bold text-gray-800">{t("alerts.geoFence") || t("tabs.alerts")}</CardTitle>
+                        <CardDescription className="text-xs text-gray-400">{t("services.emergency_contacts")}</CardDescription>
                       </div>
                       <button onClick={() => setActiveTab("alerts")} className="text-xs text-blue-600 font-semibold hover:underline">
-                        View All
+                        {t("common.view") || "View All"}
                       </button>
                     </CardHeader>
                     <CardContent className="p-4 pt-0">
                       <div className="space-y-4">
                         {alerts.length === 0 ? (
                           <div className="text-center py-4 text-xs text-gray-400">
-                            No recent safety alerts.
+                            {t("status.unknown") || "No recent safety alerts."}
                           </div>
                         ) : (
                           alerts.slice(0, 4).map((alert) => {
@@ -948,11 +951,11 @@ export function TouristDashboard() {
                   <Card className="bg-white border-gray-200/80 shadow-sm">
                     <CardHeader className="pb-3 flex flex-row items-center justify-between">
                       <div>
-                        <CardTitle className="text-sm font-bold text-gray-800">Live Tracking</CardTitle>
-                        <CardDescription className="text-xs text-gray-400">Family members & travel companion status</CardDescription>
+                        <CardTitle className="text-sm font-bold text-gray-800">{t("tabs.tracking")}</CardTitle>
+                        <CardDescription className="text-xs text-gray-400">{t("tracking.locationEnabled") || "Family members & travel companion status"}</CardDescription>
                       </div>
                       <button onClick={() => setActiveTab("tracking")} className="text-xs text-blue-600 font-semibold hover:underline">
-                        View All
+                        {t("common.view") || "View All"}
                       </button>
                     </CardHeader>
                     <CardContent className="p-4 pt-0">
@@ -991,8 +994,8 @@ export function TouristDashboard() {
                 {/* 1. Safety Overview line chart (4 columns) */}
                 <Card className="lg:col-span-4 bg-white border-gray-200/80 shadow-sm">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-bold text-gray-800">Safety Overview</CardTitle>
-                    <CardDescription className="text-xs text-gray-400">Weekly alert incidence tracker</CardDescription>
+                    <CardTitle className="text-sm font-bold text-gray-800">{t("safetyScore.title") || "Safety Overview"}</CardTitle>
+                    <CardDescription className="text-xs text-gray-400">{t("safetyScore.currentScore") || "Weekly alert incidence tracker"}</CardDescription>
                   </CardHeader>
                   <CardContent className="p-3 pt-0">
                     {/* SVG Line Chart */}
@@ -1032,8 +1035,8 @@ export function TouristDashboard() {
                 {/* 2. Alerts by Type donut chart (3 columns) */}
                 <Card className="lg:col-span-3 bg-white border-gray-200/80 shadow-sm">
                   <CardHeader className="pb-1">
-                    <CardTitle className="text-sm font-bold text-gray-800">Alerts by Type</CardTitle>
-                    <CardDescription className="text-xs text-gray-400">Distribution category breakdown</CardDescription>
+                    <CardTitle className="text-sm font-bold text-gray-800">{t("heatmap.title") || "Alerts by Type"}</CardTitle>
+                    <CardDescription className="text-xs text-gray-400">{t("heatmap.desc") || "Distribution category breakdown"}</CardDescription>
                   </CardHeader>
                   <CardContent className="p-3 pt-0 flex flex-col items-center">
                     {/* Donut Chart SVG */}
@@ -1072,8 +1075,8 @@ export function TouristDashboard() {
                 {/* 3. System Health (2 columns) */}
                 <Card className="lg:col-span-2 bg-white border-gray-200/80 shadow-sm">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-bold text-gray-800">System Health</CardTitle>
-                    <CardDescription className="text-xs text-gray-400">Services connectivity status</CardDescription>
+                    <CardTitle className="text-sm font-bold text-gray-800">{t("header.system.operational")}</CardTitle>
+                    <CardDescription className="text-xs text-gray-400">{t("status.all_systems_operational")}</CardDescription>
                   </CardHeader>
                   <CardContent className="p-4 pt-0">
                     <div className="space-y-3.5">
@@ -1094,10 +1097,10 @@ export function TouristDashboard() {
                   <CardHeader className="pb-2 flex flex-row items-center justify-between">
                     <div>
                       <CardTitle className="text-sm font-bold text-white flex items-center space-x-1.5">
-                        <span>AI Assistant</span>
+                        <span>{t("tabs.ai_assistant")}</span>
                         <span className="bg-blue-500 text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-full text-white font-black">New</span>
                       </CardTitle>
-                      <CardDescription className="text-[11px] text-indigo-200">Hi! I'm your AI safety assistant.</CardDescription>
+                      <CardDescription className="text-[11px] text-indigo-200">{t("ai.title")}</CardDescription>
                     </div>
                   </CardHeader>
                   <CardContent className="p-3 pt-0 space-y-3.5">
@@ -1138,7 +1141,7 @@ export function TouristDashboard() {
                     <form onSubmit={handleSendAiMessage} className="flex items-center space-x-1.5 bg-white/10 rounded-full p-1 border border-white/15">
                       <input
                         type="text"
-                        placeholder="Ask me anything..."
+                        placeholder={t("common.search") || "Ask me anything..."}
                         value={aiInputValue}
                         onChange={(e) => setAiInputValue(e.target.value)}
                         className="bg-transparent text-xs text-white placeholder-indigo-300/60 focus:outline-none flex-1 px-3 py-1"
@@ -1166,7 +1169,7 @@ export function TouristDashboard() {
                     <Bell className="h-5 w-5 text-blue-500" />
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Alerts</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{t("authority.activeAlerts") || "Total Alerts"}</p>
                     <h3 className="text-2xl font-bold text-gray-800">{sentAlerts.length + receivedAlerts.length}</h3>
                   </div>
                 </div>
@@ -1175,7 +1178,7 @@ export function TouristDashboard() {
                     <User className="h-5 w-5 text-blue-500" />
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Sent by Me</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{t("profile.title") || "Sent by Me"}</p>
                     <h3 className="text-2xl font-bold text-blue-600">{sentAlerts.length}</h3>
                   </div>
                 </div>
@@ -1184,7 +1187,7 @@ export function TouristDashboard() {
                     <AlertCircle className="h-5 w-5 text-purple-500" />
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Auto Received</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{t("alerts.anomaly") || "Auto Received"}</p>
                     <h3 className="text-2xl font-bold text-purple-600">{receivedAlerts.length}</h3>
                   </div>
                 </div>
@@ -1202,8 +1205,8 @@ export function TouristDashboard() {
                           <User className="h-4 w-4 text-blue-600" />
                         </div>
                         <div>
-                          <CardTitle className="text-sm font-bold text-gray-800">Alerts I Sent</CardTitle>
-                          <CardDescription className="text-[11px] text-gray-400">Manually triggered by you</CardDescription>
+                          <CardTitle className="text-sm font-bold text-gray-800">{t("profile.title") || "Alerts I Sent"}</CardTitle>
+                          <CardDescription className="text-[11px] text-gray-400">{t("emergency.alert_sent") || "Manually triggered by you"}</CardDescription>
                         </div>
                       </div>
                       <Badge className="bg-blue-50 text-blue-700 border border-blue-200 font-bold text-[10px]">
@@ -1275,8 +1278,8 @@ export function TouristDashboard() {
                           <AlertCircle className="h-4 w-4 text-purple-600" />
                         </div>
                         <div>
-                          <CardTitle className="text-sm font-bold text-gray-800">Auto Alerts Received</CardTitle>
-                          <CardDescription className="text-[11px] text-gray-400">Sent automatically when you enter a risk zone</CardDescription>
+                          <CardTitle className="text-sm font-bold text-gray-800">{t("alerts.anomaly") || "Auto Alerts Received"}</CardTitle>
+                          <CardDescription className="text-[11px] text-gray-400">{t("tracking.safeZone") || "Sent automatically when you enter a risk zone"}</CardDescription>
                         </div>
                       </div>
                       <Badge className="bg-purple-50 text-purple-700 border border-purple-200 font-bold text-[10px]">
@@ -1352,8 +1355,8 @@ export function TouristDashboard() {
           {activeTab === "tracking" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="text-center max-w-xl mx-auto mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">GPS Tracking & Safe Zones</h2>
-                <p className="text-xs text-gray-500">View safe perimeters, hospitals, police stations, and tracked travel companions.</p>
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">{t("tracking.title")}</h2>
+                <p className="text-xs text-gray-500">{t("tracking.subtitle")}</p>
               </div>
               <LiveTrackingMap />
             </div>
@@ -1363,8 +1366,8 @@ export function TouristDashboard() {
           {activeTab === "emergency" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="text-center max-w-xl mx-auto mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">Advanced SOS Panel</h2>
-                <p className="text-xs text-gray-500">Trigger immediate panic signals, record emergency voice memos, or sync offline alerts.</p>
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">{t("emergency.title")}</h2>
+                <p className="text-xs text-gray-500">{t("emergency.panicButtonSubtext") || "Trigger immediate panic signals, record emergency voice memos, or sync offline alerts."}</p>
               </div>
               <EnhancedEmergencySystem />
             </div>
@@ -1376,8 +1379,8 @@ export function TouristDashboard() {
               
               <Card className="bg-white border-gray-200/80 shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-gray-800 text-sm font-bold uppercase tracking-wide">Essential Safety Guidelines</CardTitle>
-                  <CardDescription className="text-xs text-gray-400">Keep these rules in mind during your travel</CardDescription>
+                  <CardTitle className="text-gray-800 text-sm font-bold uppercase tracking-wide">{t("safety.tips_title")}</CardTitle>
+                  <CardDescription className="text-xs text-gray-400">{t("safety.tips_desc")}</CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
                   <div className="space-y-3">
@@ -1393,13 +1396,13 @@ export function TouristDashboard() {
 
               <Card className="bg-white border-gray-200/80 shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-gray-800 text-sm font-bold uppercase tracking-wide">Emergency Actions Action-List</CardTitle>
-                  <CardDescription className="text-xs text-gray-400">Immediate steps to take during safety incidents</CardDescription>
+                  <CardTitle className="text-gray-800 text-sm font-bold uppercase tracking-wide">{t("safety.what_to_do")}</CardTitle>
+                  <CardDescription className="text-xs text-gray-400">{t("safety.local_emergency_desc")}</CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
                   <div className="space-y-4">
                     <div className="p-4 border border-gray-100 rounded-xl bg-gray-50/30">
-                      <h4 className="font-semibold text-xs mb-2 text-gray-850">Local Speed Dial Directory</h4>
+                      <h4 className="font-semibold text-xs mb-2 text-gray-850">{t("safety.emergency_numbers")}</h4>
                       <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
                         <p>Police Station: 100</p>
                         <p>Ambulance Service: 102</p>
@@ -1408,7 +1411,7 @@ export function TouristDashboard() {
                       </div>
                     </div>
                     <div className="p-4 border border-gray-100 rounded-xl bg-gray-50/30">
-                      <h4 className="font-semibold text-xs mb-2 text-gray-850">Emergency Procedures</h4>
+                      <h4 className="font-semibold text-xs mb-2 text-gray-850">{t("safety.local_emergency")}</h4>
                       <ol className="space-y-2 text-xs text-gray-650 list-decimal list-inside leading-normal">
                         <li>Press the main SOS button or dial emergency contacts.</li>
                         <li>Find a secure, public lit environment and stay there.</li>
@@ -1427,8 +1430,8 @@ export function TouristDashboard() {
           {activeTab === "ai-assistant" && (
             <div className="space-y-8 animate-in fade-in duration-200">
               <div className="text-center max-w-xl mx-auto">
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">AI Safety Panel</h2>
-                <p className="text-xs text-gray-500">Comprehensive AI risk analysis and personalized safety advice powered by Google Gemini.</p>
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">{t("ai.title")}</h2>
+                <p className="text-xs text-gray-500">{t("ai.desc")}</p>
               </div>
               
               <AISafetyAssistant />
@@ -1440,8 +1443,8 @@ export function TouristDashboard() {
           {activeTab === "ai-anomaly" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="text-center max-w-xl mx-auto mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">AI Anomaly Analysis</h2>
-                <p className="text-xs text-gray-500">Automatic route deviations and connection failure report log.</p>
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">{t("tabs.ai_anomaly")}</h2>
+                <p className="text-xs text-gray-500">{t("ai.realtime_desc")}</p>
               </div>
               <AIAnomalyDetector />
             </div>
@@ -1451,15 +1454,15 @@ export function TouristDashboard() {
           {activeTab === "profile" && (
             <Card className="bg-white border-gray-200 max-w-3xl mx-auto shadow-sm animate-in fade-in duration-200">
               <CardHeader>
-                <CardTitle className="text-gray-800">Account Profile & Settings</CardTitle>
-                <CardDescription>Manage verified tourist registration records</CardDescription>
+                <CardTitle className="text-gray-800">{t("profile.title")}</CardTitle>
+                <CardDescription>{t("profile.desc")}</CardDescription>
               </CardHeader>
               <CardContent className="p-6">
                 <form onSubmit={handleSaveProfile} className="space-y-6">
                   {saveSuccess && (
                     <Alert className="bg-emerald-50 border-emerald-200 text-emerald-800">
                       <CheckCircle className="h-4 w-4 text-emerald-600 mr-2 shrink-0" />
-                      <AlertDescription>Profile updated successfully!</AlertDescription>
+                      <AlertDescription>{t("common.success")}</AlertDescription>
                     </Alert>
                   )}
                   {profileError && (
@@ -1482,10 +1485,10 @@ export function TouristDashboard() {
 
                   {/* Personal Info */}
                   <div className="space-y-4">
-                    <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wide">Personal Information</h4>
+                    <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wide">{t("digital_id.title") || "Personal Information"}</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <label className="text-xs font-semibold text-gray-500">Full Name</label>
+                        <label className="text-xs font-semibold text-gray-500">{t("digitalId.form.aadhaarNumber") || "Full Name"}</label>
                         <input
                           type="text"
                           required
@@ -1509,10 +1512,10 @@ export function TouristDashboard() {
 
                   {/* Emergency Contacts */}
                   <div className="space-y-4 pt-2">
-                    <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wide">Emergency Contacts</h4>
+                    <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wide">{t("services.emergency_contacts")}</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <label className="text-xs font-semibold text-gray-500">Contact Name</label>
+                        <label className="text-xs font-semibold text-gray-500">{t("digitalId.form.emergencyContactName")}</label>
                         <input
                           type="text"
                           value={emergencyContact}
@@ -1522,7 +1525,7 @@ export function TouristDashboard() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-xs font-semibold text-gray-500">Contact Phone</label>
+                        <label className="text-xs font-semibold text-gray-500">{t("digitalId.form.emergencyContactPhone")}</label>
                         <input
                           type="text"
                           value={emergencyPhone}
@@ -1612,7 +1615,7 @@ export function TouristDashboard() {
                       className="text-red-650 hover:text-red-750 hover:bg-red-50 border-red-200 transition-colors text-xs"
                     >
                       {isLoggingOut ? <LoadingSpinner size="sm" /> : <LogOut className="h-4 w-4 mr-2" />}
-                      Logout Account
+                      {t("header.logout")}
                     </Button>
 
                     <Button
@@ -1620,7 +1623,7 @@ export function TouristDashboard() {
                       disabled={isSavingProfile}
                       className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg text-xs transition-colors shadow-sm"
                     >
-                      {isSavingProfile ? <LoadingSpinner size="sm" /> : "Save Changes"}
+                      {isSavingProfile ? <LoadingSpinner size="sm" /> : t("common.save")}
                     </Button>
                   </div>
                 </form>
