@@ -20,7 +20,7 @@ interface AuthContextType {
   user: AuthUser | null
   loading: boolean
   signOut: () => Promise<void>
-  signIn: (email: string, password: string) => Promise<void>
+  signIn: (email: string, password: string, role?: "tourist" | "admin") => Promise<void>
   signUp: (email: string, password: string, role: "tourist" | "admin") => Promise<void>
   login: (email: string, password: string, role: "tourist" | "admin") => Promise<void>
   register: (email: string, password: string, name: string, role: "tourist" | "admin") => Promise<void>
@@ -62,8 +62,6 @@ function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
     })
 
     if (res?.error) {
-      // NextAuth returns the thrown error message in res.error
-      // If it's the generic "CredentialsSignin", provide a better message
       const errorMessage = res.error === "CredentialsSignin"
         ? "Invalid email or password. Please try again."
         : res.error
@@ -85,6 +83,7 @@ function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
     const data = await res.json()
 
     if (!res.ok) {
+      console.warn("[NextAuth] Registration response:", data.error)
       throw new Error(data.error || "Registration failed")
     }
 
@@ -105,7 +104,6 @@ function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       console.log("[Auth] Starting sign out process...")
-      // Clear any custom tokens
       if (typeof window !== "undefined") {
         localStorage.removeItem("sb-access-token")
         localStorage.removeItem("sb-refresh-token")
@@ -114,19 +112,11 @@ function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
         document.cookie = "sb-refresh-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;"
       }
 
-      // Clear user state immediately so UI updates
       setUser(null)
-
-      // NextAuth signout - await it properly
       await nextAuthSignOut({ redirect: false })
-      
-      console.log("[Auth] Signed out, redirecting to login...")
-      
-      // Force hard redirect to the login page
       window.location.href = "/"
     } catch (error) {
       console.error("[Auth] Sign out error:", error)
-      // Even if signout fails, clear state and redirect
       setUser(null)
       window.location.href = "/"
     }

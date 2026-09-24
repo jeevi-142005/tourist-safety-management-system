@@ -41,8 +41,8 @@ export function LoginSelection() {
     try {
       await login(email, password, selectedRole)
     } catch (err) {
-      console.error("[Auth] Login error:", err)
-      setError(err instanceof Error ? err.message : "Login failed")
+      const msg = err instanceof Error ? err.message : "Login failed"
+      setError(msg)
     } finally {
       setLoading(false)
     }
@@ -68,12 +68,10 @@ export function LoginSelection() {
 
     try {
       await register(email, password, name, selectedRole)
-      // If we get here, registration AND auto-login succeeded
-      // The session update will redirect the user automatically
       setSuccess("Account created successfully! Redirecting...")
     } catch (err) {
-      console.error("[Auth] Registration error:", err)
-      setError(err instanceof Error ? err.message : "Registration failed")
+      const msg = err instanceof Error ? err.message : "Registration failed"
+      setError(msg)
     } finally {
       setLoading(false)
     }
@@ -286,11 +284,6 @@ export function LoginSelection() {
                     <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                       Password
                     </label>
-                    {isLogin && (
-                      <a href="#" className="text-xs text-blue-600 hover:underline">
-                        Forgot Password?
-                      </a>
-                    )}
                   </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-slate-400" />
@@ -350,8 +343,20 @@ export function LoginSelection() {
 
                 {/* Feedback Notifications */}
                 {error && (
-                  <div className="text-red-600 dark:text-red-400 text-xs bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 p-3 rounded-xl">
-                    {error}
+                  <div className="text-red-600 dark:text-red-400 text-xs bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 p-3 rounded-xl flex items-center justify-between">
+                    <span>{error}</span>
+                    {error.includes("already exists") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsLogin(true)
+                          setError("")
+                        }}
+                        className="ml-2 underline font-bold text-blue-600 dark:text-blue-400 shrink-0 cursor-pointer"
+                      >
+                        Sign In instead?
+                      </button>
+                    )}
                   </div>
                 )}
 
