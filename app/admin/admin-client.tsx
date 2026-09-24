@@ -1,528 +1,245 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { signOut } from "next-auth/react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Input } from "@/components/ui/input"
+import { OverviewTab } from "@/components/admin/overview-tab"
+import { TouristsTab } from "@/components/admin/tourists-tab"
+import { DigiIdsTab } from "@/components/admin/digi-ids-tab"
+import { AlertsTab } from "@/components/admin/alerts-tab"
+import { ResourcesTab } from "@/components/admin/resources-tab"
+import { NotificationsTab } from "@/components/admin/notifications-tab"
 import {
-    Users,
-    AlertTriangle,
-    Shield,
-    Activity,
-    MapPin,
-    Phone,
-    Mail,
-    Clock,
-    Battery,
-    QrCode,
-    Search,
-    LogOut,
-    RefreshCw,
-    Eye,
-    MessageSquare,
-    Brain,
+  Users, AlertTriangle, Shield, QrCode, Bell, Ambulance, LogOut, RefreshCw, LayoutDashboard, Menu, X, History, Sparkles, Plus
 } from "lucide-react"
 
-interface Tourist {
-    id: string
-    full_name: string
-    email: string
-    phone: string
-    emergency_contact: string
-    emergency_phone: string
-    blockchain_id: string
-    qr_code_data: string
-    created_at: string
-    current_location: {
-        latitude: number
-        longitude: number
-        timestamp: string
-        battery_level: number
-        is_emergency: boolean
-    } | null
-    safety_score: number
-    risk_level: string
-    active_alerts_count: number
-    status: "safe" | "alert" | "emergency"
-}
-
-interface DashboardStats {
-    activeTourists: number
-    activeAlerts: number
-    criticalAlerts: number
-    resolvedToday: number
-    systemUptime: number
-    avgResponseTime: number
-    geoZones: number
-    blockchainTransactions: number
-    aiEfficiency: number
-    threatDetectionAccuracy: number
-}
-
 export default function AdminDashboardClient() {
-    const [tourists, setTourists] = useState<Tourist[]>([])
-    const [stats, setStats] = useState<DashboardStats | null>(null)
-    const [loading, setLoading] = useState(true)
-    const [searchTerm, setSearchTerm] = useState("")
-    const [statusFilter, setStatusFilter] = useState<string>("all")
-    const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [activeTab, setActiveTab] = useState("overview")
+  const [stats, setStats] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-    const [activeTab, setActiveTab] = useState("tourists")
-
-    const handleLogout = async () => {
-        try {
-            setIsLoggingOut(true)
-            // Clear any custom tokens
-            if (typeof window !== "undefined") {
-                localStorage.removeItem("sb-access-token")
-                localStorage.removeItem("sb-refresh-token")
-                localStorage.removeItem("tourist-safety-user")
-            }
-            await signOut({ redirect: false })
-            window.location.href = "/"
-        } catch (error) {
-            console.error("Logout error:", error)
-            window.location.href = "/"
-        } finally {
-            setIsLoggingOut(false)
-        }
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/stats")
+      if (res.ok) {
+        const data = await res.json()
+        setStats(data)
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error)
+    } finally {
+      setLoading(false)
     }
+  }, [])
 
-    useEffect(() => {
-        fetchDashboardData()
-        // Refresh every 30 seconds
-        const interval = setInterval(fetchDashboardData, 30000)
-        return () => clearInterval(interval)
-    }, [])
+  useEffect(() => {
+    fetchStats()
+    const interval = setInterval(fetchStats, 30000)
+    return () => clearInterval(interval)
+  }, [fetchStats])
 
-    const fetchDashboardData = async () => {
-        try {
-            const [touristsResponse, statsResponse] = await Promise.all([
-                fetch("/api/admin/tourists"),
-                fetch("/api/admin/dashboard-stats"),
-            ])
-
-            if (touristsResponse.ok) {
-                const touristsData = await touristsResponse.json()
-                setTourists(touristsData.tourists)
-            }
-
-            if (statsResponse.ok) {
-                const statsData = await statsResponse.json()
-                setStats(statsData)
-            }
-        } catch (error) {
-            console.error("Error fetching dashboard data:", error)
-        } finally {
-            setLoading(false)
-        }
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true)
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("tourist-safety-user")
+      }
+      await signOut({ redirect: false })
+      window.location.href = "/"
+    } catch (error) {
+      console.error("Logout error:", error)
+      window.location.href = "/"
+    } finally {
+      setIsLoggingOut(false)
     }
+  }
 
-    const filteredTourists = tourists.filter((tourist) => {
-        const matchesSearch =
-            tourist.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            tourist.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            tourist.blockchain_id?.toLowerCase().includes(searchTerm.toLowerCase())
+  const navItems = [
+    { id: "overview", label: "Dashboard", icon: LayoutDashboard },
+    { id: "tourists", label: "Tourists", icon: Users },
+    { id: "create-digi-id", label: "Create Digi ID", icon: Plus },
+    { id: "digi-ids", label: "Digi IDs & QR", icon: QrCode },
+    { id: "alerts", label: "Alerts", icon: AlertTriangle, badge: stats?.activeAlerts },
+    { id: "resources", label: "Emergency Response", icon: Ambulance },
+    { id: "notifications", label: "Notifications", icon: Bell, badge: stats?.unreadNotifications },
+    { id: "history", label: "Alert History", icon: History },
+  ]
 
-        const matchesStatus = statusFilter === "all" || tourist.status === statusFilter
-
-        return matchesSearch && matchesStatus
-    })
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case "safe":
-                return "bg-green-100 text-green-800"
-            case "alert":
-                return "bg-yellow-100 text-yellow-800"
-            case "emergency":
-                return "bg-red-100 text-red-800"
-            default:
-                return "bg-gray-100 text-gray-800"
-        }
-    }
-
-    const getRiskLevelColor = (riskLevel: string) => {
-        switch (riskLevel) {
-            case "low":
-                return "text-green-600"
-            case "medium":
-                return "text-yellow-600"
-            case "high":
-                return "text-orange-600"
-            case "critical":
-                return "text-red-600"
-            default:
-                return "text-gray-600"
-        }
-    }
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p className="text-muted-foreground">Loading admin dashboard...</p>
-                </div>
-            </div>
-        )
-    }
-
+  if (loading) {
     return (
-        <div className="flex h-screen bg-[#f8fafc] text-gray-800 overflow-hidden font-sans">
-            {/* LEFT SIDEBAR */}
-            <aside className="w-64 bg-[#0a0f1d] text-gray-400 flex flex-col justify-between p-4 border-r border-gray-800 shrink-0">
-                <div className="space-y-6">
-                    {/* Logo / Header */}
-                    <div className="flex items-center space-x-3 px-2 py-2">
-                        <div className="p-2 bg-blue-600 rounded-lg text-white">
-                            <Shield className="h-6 w-6" />
-                        </div>
-                        <div>
-                            <h2 className="text-white font-bold text-sm leading-tight">Admin Portal</h2>
-                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Management System</span>
-                        </div>
-                    </div>
-
-                    {/* Sidebar Menu items */}
-                    <nav className="space-y-1">
-                        {[
-                            { id: "tourists", label: "Tourist Management", icon: <Users className="h-4 w-4" /> },
-                            { id: "alerts", label: "Alert Center", icon: <AlertTriangle className="h-4 w-4" /> },
-                            { id: "analytics", label: "Analytics", icon: <Activity className="h-4 w-4" /> },
-                            { id: "ai-systems", label: "AI Systems", icon: <Brain className="h-4 w-4" /> },
-                        ].map((item) => {
-                            const isActive = activeTab === item.id
-
-                            return (
-                                <button
-                                    key={item.id}
-                                    onClick={() => setActiveTab(item.id)}
-                                    className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                                        isActive 
-                                            ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
-                                            : "hover:bg-gray-800/60 hover:text-white"
-                                    }`}
-                                >
-                                    {item.icon}
-                                    <span>{item.label}</span>
-                                </button>
-                            )
-                        })}
-                    </nav>
-                </div>
-                
-                {/* Admin Profile */}
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-gray-900/50 border border-gray-850">
-                        <div className="flex items-center space-x-3">
-                            <div className="h-9 w-9 bg-blue-500/10 border border-blue-500/30 rounded-full flex items-center justify-center font-bold text-blue-450 text-sm">
-                                AD
-                            </div>
-                            <div className="leading-tight">
-                                <div className="text-xs font-semibold text-white truncate max-w-[110px]">System Admin</div>
-                                <span className="text-[9px] text-blue-400 font-medium">Administrator</span>
-                            </div>
-                        </div>
-                        <button 
-                            onClick={handleLogout}
-                            disabled={isLoggingOut}
-                            className="text-gray-500 hover:text-red-400 p-1 rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50"
-                            title="Logout"
-                        >
-                            <LogOut className="h-4 w-4" />
-                        </button>
-                    </div>
-                </div>
-            </aside>
-
-            {/* MAIN CONTENT AREA */}
-            <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#f8fafc]">
-                {/* HEADER */}
-                <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
-                    <div>
-                        <h1 className="text-xl font-bold text-gray-900">Admin Dashboard</h1>
-                        <p className="text-xs text-gray-500 mt-0.5">Real-time monitoring and management.</p>
-                    </div>
-
-                    <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full">
-                            <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                            <span className="text-xs text-emerald-700 font-medium">System Operational</span>
-                        </div>
-                        <Button onClick={fetchDashboardData} variant="outline" size="sm" className="h-8">
-                            <RefreshCw className="h-3.5 w-3.5 mr-2" />
-                            Refresh
-                        </Button>
-                        <Button 
-                            onClick={handleLogout} 
-                            disabled={isLoggingOut} 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                        >
-                            <LogOut className="h-3.5 w-3.5 mr-2" />
-                            {isLoggingOut ? "Logging out..." : "Logout"}
-                        </Button>
-                    </div>
-                </header>
-
-                <div className="p-6">
-                    {/* Stats Overview */}
-                    {stats && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                            <Card className="bg-white border-gray-200/80 shadow-sm">
-                                <CardContent className="p-6">
-                                    <div className="flex items-center space-x-2">
-                                        <Users className="h-8 w-8 text-blue-600" />
-                                        <div>
-                                            <p className="text-2xl font-bold text-blue-600">{stats.activeTourists}</p>
-                                            <p className="text-sm text-gray-600">Active Tourists</p>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="bg-white border-gray-200/80 shadow-sm">
-                                <CardContent className="p-6">
-                                    <div className="flex items-center space-x-2">
-                                        <AlertTriangle className="h-8 w-8 text-orange-600" />
-                                        <div>
-                                            <p className="text-2xl font-bold text-orange-600">{stats.activeAlerts}</p>
-                                            <p className="text-sm text-gray-600">Active Alerts</p>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="bg-white border-gray-200/80 shadow-sm">
-                                <CardContent className="p-6">
-                                    <div className="flex items-center space-x-2">
-                                        <Shield className="h-8 w-8 text-red-600" />
-                                        <div>
-                                            <p className="text-2xl font-bold text-red-600">{stats.criticalAlerts}</p>
-                                            <p className="text-sm text-gray-600">Critical Alerts</p>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="bg-white border-gray-200/80 shadow-sm">
-                                <CardContent className="p-6">
-                                    <div className="flex items-center space-x-2">
-                                        <Brain className="h-8 w-8 text-purple-600" />
-                                        <div>
-                                            <p className="text-2xl font-bold text-purple-600">{stats.aiEfficiency}%</p>
-                                            <p className="text-sm text-gray-600">AI Efficiency</p>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="bg-white border-gray-200/80 shadow-sm">
-                                <CardContent className="p-6">
-                                    <div className="flex items-center space-x-2">
-                                        <Activity className="h-8 w-8 text-green-600" />
-                                        <div>
-                                            <p className="text-2xl font-bold text-green-600">{stats.systemUptime}%</p>
-                                            <p className="text-sm text-gray-600">System Uptime</p>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
-
-                    {/* Main Dashboard */}
-                    <Tabs value={activeTab} className="space-y-4">
-                        {/* Tourist Management Tab */}
-                        <TabsContent value="tourists" className="space-y-4">
-                            <Card className="bg-white border-gray-200/80 shadow-sm">
-                                <CardHeader>
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <CardTitle>Tourist Management</CardTitle>
-                                            <CardDescription>Real-time monitoring of all registered tourists</CardDescription>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <div className="relative">
-                                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                                                <Input
-                                                    placeholder="Search tourists..."
-                                                    value={searchTerm}
-                                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                                    className="pl-10 w-64"
-                                                />
-                                            </div>
-                                            <select
-                                                value={statusFilter}
-                                                onChange={(e) => setStatusFilter(e.target.value)}
-                                                className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                            >
-                                                <option value="all">All Status</option>
-                                                <option value="safe">Safe</option>
-                                                <option value="alert">Alert</option>
-                                                <option value="emergency">Emergency</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-4">
-                                        {filteredTourists.length === 0 ? (
-                                            <p className="text-center text-gray-500 py-8">No tourists found</p>
-                                        ) : (
-                                            filteredTourists.map((tourist) => (
-                                                <div key={tourist.id} className="border rounded-lg p-4 space-y-3 bg-white hover:bg-gray-50 transition-colors">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center space-x-3">
-                                                            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                                                                <Users className="h-6 w-6 text-blue-600" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-medium text-lg">{tourist.full_name}</p>
-                                                                <div className="flex items-center space-x-4 text-sm text-gray-500">
-                                                                    <div className="flex items-center space-x-1">
-                                                                        <Mail className="h-4 w-4" />
-                                                                        <span>{tourist.email}</span>
-                                                                    </div>
-                                                                    <div className="flex items-center space-x-1">
-                                                                        <Phone className="h-4 w-4" />
-                                                                        <span>{tourist.phone}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center space-x-2">
-                                                            <Badge className={getStatusColor(tourist.status)}>{tourist.status.toUpperCase()}</Badge>
-                                                            {tourist.active_alerts_count > 0 && (
-                                                                <Badge variant="destructive">
-                                                                    {tourist.active_alerts_count} Alert{tourist.active_alerts_count > 1 ? "s" : ""}
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                                                        <div>
-                                                            <p className="text-gray-500 font-medium">Blockchain ID</p>
-                                                            <div className="flex items-center space-x-2">
-                                                                <QrCode className="h-4 w-4 text-gray-400" />
-                                                                <span className="font-mono text-xs">{tourist.blockchain_id || "Not assigned"}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-gray-500 font-medium">Current Location</p>
-                                                            <div className="flex items-center space-x-1">
-                                                                <MapPin className="h-4 w-4 text-gray-400" />
-                                                                <span>
-                                                                    {tourist.current_location
-                                                                        ? `${tourist.current_location.latitude.toFixed(4)}, ${tourist.current_location.longitude.toFixed(4)}`
-                                                                        : "Unknown"}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-gray-500 font-medium">Safety Score</p>
-                                                            <div className="flex items-center space-x-2">
-                                                                <div className={`text-lg font-bold ${getRiskLevelColor(tourist.risk_level)}`}>
-                                                                    {tourist.safety_score}/100
-                                                                </div>
-                                                                <Badge variant="outline" className={getRiskLevelColor(tourist.risk_level)}>
-                                                                    {tourist.risk_level}
-                                                                </Badge>
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-gray-500 font-medium">Last Update</p>
-                                                            <div className="flex items-center space-x-1">
-                                                                <Clock className="h-4 w-4 text-gray-400" />
-                                                                <span>
-                                                                    {tourist.current_location
-                                                                        ? new Date(tourist.current_location.timestamp).toLocaleString()
-                                                                        : "Never"}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {tourist.current_location && (
-                                                        <div className="flex items-center space-x-4 text-sm text-gray-500">
-                                                            <div className="flex items-center space-x-1">
-                                                                <Battery className="h-4 w-4" />
-                                                                <span>Battery: {tourist.current_location.battery_level}%</span>
-                                                            </div>
-                                                            <div className="flex items-center space-x-1">
-                                                                <span>Emergency Contact: {tourist.emergency_contact}</span>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    <div className="flex space-x-2 pt-2">
-                                                        <Button size="sm" variant="outline" className="bg-white">
-                                                            <Eye className="h-4 w-4 mr-1" />
-                                                            Track Live
-                                                        </Button>
-                                                        <Button size="sm" variant="outline" className="bg-white">
-                                                            <MessageSquare className="h-4 w-4 mr-1" />
-                                                            Send Alert
-                                                        </Button>
-                                                        <Button size="sm" variant="outline" className="bg-white">
-                                                            <QrCode className="h-4 w-4 mr-1" />
-                                                            View QR Code
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-
-                        {/* Other tabs would be implemented similarly */}
-                        <TabsContent value="alerts">
-                            <Card className="bg-white border-gray-200/80 shadow-sm">
-                                <CardHeader>
-                                    <CardTitle>Alert Management Center</CardTitle>
-                                    <CardDescription>Monitor and respond to tourist alerts</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <p className="text-center text-gray-500 py-8">Alert management interface coming soon...</p>
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-
-                        <TabsContent value="analytics">
-                            <Card className="bg-white border-gray-200/80 shadow-sm">
-                                <CardHeader>
-                                    <CardTitle>System Analytics</CardTitle>
-                                    <CardDescription>Performance metrics and insights</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <p className="text-center text-gray-500 py-8">Analytics dashboard coming soon...</p>
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-
-                        <TabsContent value="ai-systems">
-                            <Card className="bg-white border-gray-200/80 shadow-sm">
-                                <CardHeader>
-                                    <CardTitle>AI Systems Control</CardTitle>
-                                    <CardDescription>Monitor and control AI-powered features</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <p className="text-center text-gray-500 py-8">AI systems control panel coming soon...</p>
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-                    </Tabs>
-                </div>
-            </main>
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
+        <div className="text-center space-y-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="text-sm text-slate-400 font-medium">Loading Command Center...</p>
         </div>
+      </div>
     )
+  }
+
+  return (
+    <div className="flex h-screen bg-slate-50 text-slate-800 overflow-hidden font-sans">
+      {/* MOBILE BACKDROP */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* SIDEBAR */}
+      <aside
+        className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-slate-950 text-slate-300 flex flex-col justify-between p-4 border-r border-slate-800 transition-transform duration-200 ease-in-out shrink-0 ${
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        }`}
+      >
+        <div className="space-y-6">
+          {/* Logo / Title */}
+          <div className="flex items-center justify-between px-2 py-2">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl text-white shadow-md shadow-blue-500/20">
+                <Shield className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-white font-bold text-sm leading-tight tracking-tight">Safety Command</h2>
+                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold flex items-center gap-1">
+                  <Sparkles className="h-2.5 w-2.5 text-blue-400" /> Admin Module
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="md:hidden text-slate-400 hover:text-white p-1"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Navigation Menu */}
+          <nav className="space-y-1">
+            {navItems.map((item) => {
+              const isActive = activeTab === item.id
+
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveTab(item.id)
+                    setMobileMenuOpen(false)
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-150 ${
+                    isActive
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
+                      : "hover:bg-slate-900 hover:text-white text-slate-400"
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </div>
+                  {item.badge != null && item.badge > 0 && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        isActive ? "bg-white text-blue-600" : "bg-rose-500 text-white"
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </nav>
+        </div>
+
+        {/* Profile / Logout Footer */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+            <div className="flex items-center space-x-3">
+              <div className="h-8 w-8 bg-blue-500/10 border border-blue-500/30 rounded-full flex items-center justify-center font-bold text-blue-400 text-xs">
+                AD
+              </div>
+              <div className="leading-tight">
+                <div className="text-xs font-bold text-white truncate max-w-[110px]">System Admin</div>
+                <span className="text-[9px] text-emerald-400 font-medium">Command Active</span>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="text-slate-400 hover:text-rose-400 p-1.5 rounded-md hover:bg-slate-800 transition-colors disabled:opacity-50"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-slate-50">
+        {/* HEADER */}
+        <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3.5 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-xs">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="md:hidden text-slate-600 hover:text-slate-900 p-1.5 rounded-lg border border-slate-200"
+              title="Open Navigation"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                {activeTab === "overview" && "Safety Management Dashboard"}
+                {activeTab === "tourists" && "Digital Personas & Tourist Roster"}
+                {activeTab === "digi-ids" && "Tourist Digi IDs & QR Controls"}
+                {activeTab === "alerts" && "Alert & Incident Command Center"}
+                {activeTab === "resources" && "Emergency Response Resources"}
+                {activeTab === "notifications" && "Admin Notifications Feed"}
+                {activeTab === "history" && "Alert & Safety Incident History"}
+              </h1>
+              <p className="text-xs text-slate-500 hidden sm:block mt-0.5">
+                Real-time safety monitoring, Digi ID verification, and rapid emergency intervention.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2.5">
+            <div className="hidden sm:flex items-center space-x-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full">
+              <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></div>
+              <span className="text-xs text-emerald-700 font-semibold">Network Online</span>
+            </div>
+            <Button onClick={fetchStats} variant="outline" size="sm" className="h-8 text-xs bg-white">
+              <RefreshCw className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
+            <Button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 bg-white"
+            >
+              <LogOut className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">{isLoggingOut ? "Exiting..." : "Logout"}</span>
+            </Button>
+          </div>
+        </header>
+
+        {/* TAB CONTENTS */}
+        <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto w-full">
+          {activeTab === "overview" && <OverviewTab stats={stats} onNavigate={(tab) => setActiveTab(tab)} />}
+          {activeTab === "tourists" && <TouristsTab />}
+          {activeTab === "create-digi-id" && <DigiIdsTab initialMode="create" key="create-digi-id-tab" />}
+          {activeTab === "digi-ids" && <DigiIdsTab initialMode="list" key="digi-ids-tab" />}
+          {activeTab === "alerts" && <AlertsTab defaultFilter="all" />}
+          {activeTab === "resources" && <ResourcesTab />}
+          {activeTab === "notifications" && <NotificationsTab />}
+          {activeTab === "history" && <AlertsTab defaultFilter="resolved" title="Alert & Incident History" />}
+        </div>
+      </main>
+    </div>
+  )
 }
 

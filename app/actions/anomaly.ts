@@ -22,6 +22,15 @@ export async function analyzeAndStoreAnomalies(metrics: any, location: any, user
     throw new Error("User ID is required")
   }
 
+  // Fetch user for name & digiId context
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { name: true, email: true, touristIds: { where: { isActive: true }, take: 1 } },
+  })
+
+  const userName = user?.name || user?.email.split("@")[0] || "Tourist"
+  const digiIdHash = user?.touristIds[0]?.blockchainHash || null
+
   // Get anomalies from Gemini
   const anomalies = await analyzeDeviceMetricsForAnomalies(metrics, location)
   
@@ -29,10 +38,10 @@ export async function analyzeAndStoreAnomalies(metrics: any, location: any, user
     return []
   }
 
-  // Store in database
+  // Store in database and auto-raise alert + notification for significant anomalies
   const createdAnomalies = await Promise.all(
     anomalies.map(async (anomaly: any) => {
-      return await db.anomalyPattern.create({
+      const anomalyRecord = await db.anomalyPattern.create({
         data: {
           userId,
           type: anomaly.type || "behavioral",
@@ -45,6 +54,42 @@ export async function analyzeAndStoreAnomalies(metrics: any, location: any, user
           recommendations: anomaly.recommendations || []
         }
       })
+
+      // If anomaly severity is medium, high, or critical, auto-generate Emergency Alert & Admin Notification
+      if (["medium", "high", "critical"].includes(anomaly.severity)) {
+        // Create emergency alert record for Admin Dashboard
+        await db.emergencyAlert.create({
+          data: {
+            userId,
+            userName,
+            type: `anomaly_${anomaly.type || "behavioral"}`,
+            message: `Automatic Anomaly Alert: ${anomaly.description}`,
+            severity: anomaly.severity,
+            locationLat: location?.lat ? parseFloat(String(location.lat)) : null,
+            locationLng: location?.lng ? parseFloat(String(location.lng)) : null,
+            status: "active",
+            deviceInfo: metrics ? metrics : null,
+          }
+        })
+
+        // Create Admin Notification
+        await db.adminNotification.create({
+          data: {
+            type: "anomaly_detected",
+            title: `Safety Anomaly Detected for ${userName}`,
+            message: `[${anomaly.severity.toUpperCase()}] ${anomaly.description}`,
+            severity: anomaly.severity === "critical" ? "critical" : "warning",
+            userId,
+            metadata: {
+              anomaly_id: anomalyRecord.id,
+              digi_id_hash: digiIdHash,
+              location: location,
+            }
+          }
+        })
+      }
+
+      return anomalyRecord
     })
   )
 

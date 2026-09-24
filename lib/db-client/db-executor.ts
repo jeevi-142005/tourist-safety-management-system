@@ -19,7 +19,7 @@ const fieldMap: Record<string, Record<string, string>> = {
     email: "email",
     name: "name",
     blockchain_id: "blockchainId",
-    is_active: "role",
+    role: "role",
     created_at: "createdAt",
   },
   geo_zones: {
@@ -293,11 +293,17 @@ export async function executeDbQuery(params: {
   const where: any = {}
   if (filters) {
     for (const [field, filter] of Object.entries(filters)) {
-      const prismaField = toPrismaField(table, field)
+      let prismaField = toPrismaField(table, field)
+      if (field === "is_active" && (table === "tourist_profiles" || table === "profiles")) {
+        prismaField = "role"
+      }
+
       const { op, value } = filter as { op: string; value: any }
       
       let finalValue = value
-      if (typeof value === "string" && (
+      if (prismaField === "role" && typeof value === "boolean") {
+        finalValue = value ? "tourist" : { not: "tourist" }
+      } else if (typeof value === "string" && (
         prismaField.endsWith("At") || 
         prismaField.endsWith("Date") || 
         prismaField.endsWith("From") || 
