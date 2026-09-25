@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
     const metrics = {
       totalAnalyses: (safetyScores.data?.length || 0) + 1,
       threatsDetected:
-        alertHistory.data?.filter((alert) => alert.severity === "high" || alert.severity === "critical").length || 0,
+        alertHistory.data?.filter((alert: any) => alert.severity === "high" || alert.severity === "critical").length || 0,
       avgResponseTime: Math.floor(Math.random() * 500) + 200, // Simulated response time
       systemUptime: "24:15:32", // Simulated uptime
     }

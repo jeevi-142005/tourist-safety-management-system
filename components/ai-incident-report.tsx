@@ -116,7 +116,7 @@ export function AIIncidentReport({ alert, resolution = "Resolved by admin" }: AI
                       <span className="text-sm font-medium">Location:</span>
                       <p className="text-sm text-gray-600">
                         {alert.location
-                          ? `${alert.location.lat.toFixed(4)}, ${alert.location.lng.toFixed(4)}`
+                          ? `${((alert.location as any).latitude ?? (alert.location as any).lat ?? 0).toFixed(4)}, ${((alert.location as any).longitude ?? (alert.location as any).lng ?? 0).toFixed(4)}`
                           : "Unknown"}
                       </p>
                     </div>

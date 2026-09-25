@@ -228,7 +228,7 @@ export function NotificationSystem() {
         timestamp: alert.timestamp,
         read: false,
         alertType: alert.type as any,
-        priority: alert.severity === 'critical' ? 'critical' : 'high'
+        priority: (alert as any).severity === 'critical' || alert.priority === 'critical' ? 'critical' : (alert.priority || 'high')
       }))
 
       setNotifications((prev) => {

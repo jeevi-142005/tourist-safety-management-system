@@ -1,4 +1,4 @@
-﻿import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import { db } from "@/lib/db"
@@ -15,14 +15,17 @@ export async function POST(request: NextRequest) {
 
     const created = []
     for (const alert of alerts) {
-      const record = await db.alert.create({
+      const record = await db.emergencyAlert.create({
         data: {
           userId: uid,
+          userName: (session?.user as any)?.name || "Tourist User",
           type: alert.type || "emergency",
           message: alert.message || "Offline SOS alert",
           severity: alert.severity || "high",
           status: "active",
-          metadata: {
+          locationLat: alert.location?.lat ? parseFloat(String(alert.location.lat)) : null,
+          locationLng: alert.location?.lng ? parseFloat(String(alert.location.lng)) : null,
+          deviceInfo: {
             offline: true,
             queuedAt: alert.queuedAt,
             syncedAt: new Date().toISOString(),

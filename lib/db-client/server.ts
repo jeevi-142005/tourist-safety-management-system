@@ -130,7 +130,7 @@ export async function createServerClient() {
       return { data: null, error: null }
     },
     channel: (name: string) => ({
-      send: async () => ({ data: null, error: null }),
+      send: async (_payload?: any) => ({ data: null, error: null }),
       subscribe: () => ({ unsubscribe: () => {} })
     })
   }

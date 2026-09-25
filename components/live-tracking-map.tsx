@@ -239,8 +239,8 @@ export function LiveTrackingMap() {
 
   const getBatteryLevel = async () => {
     try {
-      if ("getBattery" in navigator) {
-        const battery = await navigator.getBattery()
+      if ("getBattery" in navigator && typeof (navigator as any).getBattery === "function") {
+        const battery = await (navigator as any).getBattery()
         setBatteryLevel(Math.round(battery.level * 100))
 
         battery.addEventListener("levelchange", () => {
@@ -254,7 +254,8 @@ export function LiveTrackingMap() {
 
   const fetchGeoZones = async () => {
     try {
-      const { data, error } = await Database
+      const dbClient = createBrowserClient()
+      const { data, error } = await dbClient
         .from("geo_zones")
         .select("*")
         .eq("is_active", true)
@@ -722,7 +723,7 @@ export function LiveTrackingMap() {
                   </div>
                   <div className="text-right">
                     <Badge variant="outline" className="text-xs">
-                      Risk: {zone.risk_level}/10
+                      Risk: {(zone as any).risk_level || (zone.zone_type === 'high_risk' ? '8' : zone.zone_type === 'caution' ? '5' : '1')}/10
                     </Badge>
                     {currentZone?.id === zone.id && <p className="text-xs mt-1 font-medium">CURRENT</p>}
                   </div>

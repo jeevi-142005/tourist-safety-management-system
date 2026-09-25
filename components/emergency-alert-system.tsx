@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertTriangle, Mic, MicOff, Send, Shield, Heart, Zap, Loader2 } from "lucide-react"
+import { AlertTriangle, Mic, MicOff, Send, Shield, Heart, Zap, Loader2, Phone } from "lucide-react"
 import { createClient } from "@/lib/db-client/client"
 
 interface EmergencyContact {
@@ -83,7 +84,7 @@ export function EmergencyAlertSystem() {
 
       if (!user) return
 
-      const { data, error } = await Database
+      const { data, error } = await dbClient
         .from("emergency_contacts")
         .select("*")
         .eq("user_id", user.id)

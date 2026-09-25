@@ -96,7 +96,7 @@ export function AuthorityDashboard() {
   const handleResolveAlert = async (alertId: string) => {
     try {
       const dbClient = createClient()
-      await Database
+      await dbClient
         .from("alerts")
         .update({ status: "resolved", resolved_at: new Date().toISOString() })
         .eq("id", alertId)

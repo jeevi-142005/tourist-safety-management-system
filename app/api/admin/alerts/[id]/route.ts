@@ -1,112 +1,85 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { db } from "@/lib/db"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
-import { db } from "@/lib/db"
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> | { id: string } }
+) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if ((session.user as any).role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-
-    const { id } = await params
+    const rawParams = await Promise.resolve(context.params)
+    const id = rawParams.id
     const body = await request.json()
-    const { status, resourceId, notes } = body
+    const { status, notes } = body
 
-    const validStatuses = ["active", "acknowledged", "in_progress", "resolved"]
-    if (status && !validStatuses.includes(status)) {
-      return NextResponse.json({ error: "Invalid status" }, { status: 400 })
+    if (!status) {
+      return NextResponse.json({ error: "Status is required" }, { status: 400 })
     }
 
-    const updated = await db.emergencyAlert.update({
+    const session = await getServerSession(authOptions)
+    const updaterName = session?.user?.name || (session?.user as any)?.role || "Emergency Unit"
+
+    const existingAlert = await db.emergencyAlert.findUnique({ where: { id } })
+    if (!existingAlert) {
+      return NextResponse.json({ error: "Alert not found" }, { status: 404 })
+    }
+
+    const currentDeviceInfo = (typeof existingAlert.deviceInfo === "object" && existingAlert.deviceInfo !== null)
+      ? (existingAlert.deviceInfo as Record<string, any>)
+      : {}
+
+    const updatedDeviceInfo = {
+      ...currentDeviceInfo,
+      ...(status === "resolved" ? {
+        resolvedAt: new Date().toISOString(),
+        resolvedBy: updaterName,
+      } : {}),
+      ...(status === "in_progress" ? {
+        enRouteAt: new Date().toISOString(),
+        enRouteBy: updaterName,
+      } : {}),
+    }
+
+    const alert = await db.emergencyAlert.update({
       where: { id },
-      data: { ...(status ? { status } : {}) },
+      data: {
+        status,
+        deviceInfo: updatedDeviceInfo,
+      },
     })
 
-    // If a resource is being assigned, create an AlertAssignment
-    if (resourceId) {
-      await db.alertAssignment.create({
-        data: { alertId: id, resourceId, notes: notes || null },
+    // Synchronize assignments
+    if (status === "resolved") {
+      await db.alertAssignment.updateMany({
+        where: { alertId: id },
+        data: { status: "completed", notes: notes || "Mission successfully completed by responder." },
       })
-    }
 
-    // Create admin notification for status changes
-    if (status === "acknowledged" || status === "resolved") {
+      // Notify admin
       await db.adminNotification.create({
         data: {
-          type: "alert_status_update",
-          title: `Alert ${status}`,
-          message: `Alert for ${updated.userName} has been ${status}`,
+          type: "alert_resolved",
+          title: `✅ Mission Completed: ${alert.userName}`,
+          message: `Distress signal from ${alert.userName} (${alert.type.toUpperCase()}) was marked as RESOLVED by ${updaterName}.`,
           severity: "info",
-          userId: updated.userId,
+          userId: alert.userId,
+          metadata: { alertId: id, resolvedBy: updaterName },
         },
+      })
+    } else if (status === "in_progress") {
+      await db.alertAssignment.updateMany({
+        where: { alertId: id },
+        data: { status: "en_route" },
       })
     }
 
-    return NextResponse.json({ success: true, alert: { id: updated.id, status: updated.status } })
-  } catch (error) {
-    console.error("[PATCH /api/admin/alerts/[id]]", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if ((session.user as any).role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-
-    const { id } = await params
-
-    const alert = await db.emergencyAlert.findUnique({
-      where: { id },
-      include: {
-        user: {
-          select: {
-            name: true,
-            email: true,
-            phone: true,
-            emergencyContact: true,
-            emergencyPhone: true,
-            touristIds: {
-              where: { isActive: true },
-              take: 1,
-            },
-            locationTracks: {
-              orderBy: { timestamp: "desc" },
-              take: 1,
-            },
-          },
-        },
-      },
-    })
-
-    if (!alert) return NextResponse.json({ error: "Alert not found" }, { status: 404 })
-
-    const assignments = await db.alertAssignment.findMany({
-      where: { alertId: id },
-      include: { resource: true },
-      orderBy: { assignedAt: "desc" },
-    })
-
-    return NextResponse.json({
-      alert: {
-        id: alert.id,
-        userId: alert.userId,
-        userName: alert.userName,
-        type: alert.type,
-        message: alert.message,
-        severity: alert.severity,
-        status: alert.status,
-        locationLat: alert.locationLat,
-        locationLng: alert.locationLng,
-        createdAt: alert.createdAt.toISOString(),
-        user: alert.user,
-        assignments,
-      },
-    })
-  } catch (error) {
-    console.error("[GET /api/admin/alerts/[id]]", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ success: true, alert })
+  } catch (error: any) {
+    console.error("Error updating alert:", error)
+    return NextResponse.json(
+      { error: error.message || "Failed to update alert" },
+      { status: 500 }
+    )
   }
 }

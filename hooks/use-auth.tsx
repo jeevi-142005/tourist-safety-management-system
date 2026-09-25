@@ -20,10 +20,10 @@ interface AuthContextType {
   user: AuthUser | null
   loading: boolean
   signOut: () => Promise<void>
-  signIn: (email: string, password: string, role?: "tourist" | "admin") => Promise<void>
-  signUp: (email: string, password: string, role: "tourist" | "admin") => Promise<void>
-  login: (email: string, password: string, role: "tourist" | "admin") => Promise<void>
-  register: (email: string, password: string, name: string, role: "tourist" | "admin") => Promise<void>
+  signIn: (email: string, password: string, role?: string) => Promise<void>
+  signUp: (email: string, password: string, role: string) => Promise<void>
+  login: (email: string, password: string, role: string) => Promise<void>
+  register: (email: string, password: string, name: string, role: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -71,7 +71,7 @@ function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
     console.log("[NextAuth] Sign in successful")
   }
 
-  const register = async (email: string, password: string, name: string, role: "tourist" | "admin") => {
+  const register = async (email: string, password: string, name: string, role: string) => {
     console.log("[NextAuth] Attempting registration with:", { email, name, role })
     
     const res = await fetch("/api/auth/register", {
@@ -93,11 +93,11 @@ function AuthContextSubProvider({ children }: { children: React.ReactNode }) {
     await signIn(email, password, role)
   }
 
-  const signUp = async (email: string, password: string, role: "tourist" | "admin") => {
+  const signUp = async (email: string, password: string, role: string) => {
     return register(email, password, email.split("@")[0], role)
   }
 
-  const login = async (email: string, password: string, role: "tourist" | "admin") => {
+  const login = async (email: string, password: string, role: string) => {
     return signIn(email, password, role)
   }
 

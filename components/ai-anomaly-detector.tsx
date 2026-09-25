@@ -288,7 +288,12 @@ export function AIAnomalyDetector() {
             touristName: user.name || user.email,
             type: "security",
             message: `AI detected critical anomaly: ${anomaly.description}`,
-            location: currentLocation,
+            location: {
+              latitude: (currentLocation as any)?.lat || 11.0159,
+              longitude: (currentLocation as any)?.lng || 76.9368,
+              address: "Current GPS Location",
+            },
+            priority: "critical",
             status: "active"
           })
         }

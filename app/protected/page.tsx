@@ -65,7 +65,7 @@ export default async function ProtectedPage() {
                 <strong>Full Name:</strong> {profile?.full_name || "Not set"}
               </div>
               <div>
-                <strong>Created:</strong> {new Date(data.user.created_at).toLocaleDateString()}
+                <strong>Created:</strong> {new Date((data.user as any).created_at || Date.now()).toLocaleDateString()}
               </div>
             </CardContent>
           </Card>

@@ -22,17 +22,18 @@ export function ServiceWorkerProvider() {
     }
 
     // Setup emergency broadcast channel
-    if (typeof window !== 'undefined') {
-      window.emergencyBroadcast = new BroadcastChannel('emergency-alerts')
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const bc = new BroadcastChannel('emergency-alerts')
+      ;(window as any).emergencyBroadcast = bc
       
-      window.emergencyBroadcast.onmessage = (event) => {
+      bc.onmessage = (event: MessageEvent) => {
         console.log('Emergency broadcast received:', event.data)
       }
     }
 
     return () => {
-      if (typeof window !== 'undefined' && window.emergencyBroadcast) {
-        window.emergencyBroadcast.close()
+      if (typeof window !== 'undefined' && (window as any).emergencyBroadcast) {
+        (window as any).emergencyBroadcast.close()
       }
     }
   }, [])

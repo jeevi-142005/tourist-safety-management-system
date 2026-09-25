@@ -11,22 +11,20 @@ export async function GET(request: NextRequest) {
 
     const userId = (session.user as any).id as string
 
-    // Fetch user profile for contacts stored in qrCodeData (we repurpose it as JSON contacts store)
+    // Fetch user profile for contacts stored in qrCodeData
     const user = await db.user.findUnique({
       where: { id: userId },
       select: { emergencyContact: true, emergencyPhone: true, qrCodeData: true },
     })
 
-    // Parse contacts from qrCodeData field (used as JSON store for SOS contacts list)
     let contacts: any[] = []
     if (user?.qrCodeData) {
       try {
         const parsed = JSON.parse(user.qrCodeData)
         if (Array.isArray(parsed)) contacts = parsed
-      } catch { /* invalid json, ignore */ }
+      } catch { /* ignore */ }
     }
 
-    // Add legacy single contact if exists and not already in contacts
     if (user?.emergencyContact && !contacts.find(c => c.phone === user.emergencyPhone)) {
       contacts.unshift({
         id: "legacy",
@@ -37,11 +35,10 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Fetch recent SOS / panic / emergency alerts for this user
+    // Fetch recent alerts for this user
     const recentAlerts = await db.emergencyAlert.findMany({
       where: {
         userId,
-        type: { in: ["panic", "sos", "emergency", "medical", "security", "assistance"] },
       },
       orderBy: { createdAt: "desc" },
       take: 20,
@@ -66,7 +63,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/sos — trigger an SOS / emergency alert and save to DB
+// POST /api/sos — trigger an SOS / emergency alert and auto-dispatch to available Guide / Resource
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -82,20 +79,92 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "type and message are required" }, { status: 400 })
     }
 
+    // 1-to-1 Auto-Assign to an available Guide or Emergency Unit
+    let targetResourceType = "guide"
+    const atype = String(type).toLowerCase()
+    if (["medical", "hospital", "injury"].includes(atype)) {
+      targetResourceType = "ambulance"
+    } else if (["fire", "flood", "disaster"].includes(atype)) {
+      targetResourceType = "fire"
+    } else if (["security", "patrol"].includes(atype)) {
+      targetResourceType = "security"
+    } else {
+      // For general SOS, emergency, panic, assistance, guide requests -> prioritize Guide
+      targetResourceType = "guide"
+    }
+
+    const matchedResource = await db.emergencyResource.findFirst({
+      where: { type: targetResourceType, isAvailable: true },
+      orderBy: { updatedAt: "asc" },
+    }) || await db.emergencyResource.findFirst({
+      where: { isAvailable: true },
+      orderBy: { updatedAt: "asc" },
+    })
+
+    const initialStatus = matchedResource ? "in_progress" : "active"
+
     const alert = await db.emergencyAlert.create({
       data: {
         userId,
         userName,
-        type: type || "panic",
+        type: type || "emergency",
         message,
         severity: severity || "critical",
         locationLat: location_lat ? parseFloat(String(location_lat)) : null,
         locationLng: location_lng ? parseFloat(String(location_lng)) : null,
-        status: "active",
-        deviceInfo: device_info || null,
+        status: initialStatus,
+        deviceInfo: {
+          ...(device_info || {}),
+          autoAssigned: !!matchedResource,
+          assignedResourceId: matchedResource?.id || null,
+          assignedResourceName: matchedResource?.name || null,
+          assignedResourceType: matchedResource?.type || null,
+          assignedResourcePhone: matchedResource?.phone || null,
+          autoDispatchedAt: new Date().toISOString(),
+        },
         syncedAt: new Date(),
       },
     })
+
+    // If resource is matched, create AlertAssignment and lock resource
+    if (matchedResource) {
+      await Promise.all([
+        db.alertAssignment.create({
+          data: {
+            alertId: alert.id,
+            resourceId: matchedResource.id,
+            notes: `1-to-1 automated dispatch to ${matchedResource.name}`,
+            status: "assigned",
+          }
+        }),
+        db.emergencyResource.update({
+          where: { id: matchedResource.id },
+          data: { isAvailable: false },
+        })
+      ])
+    }
+
+    // Notify Admin
+    try {
+      await db.adminNotification.create({
+        data: {
+          type: "emergency_alert",
+          title: `🚨 Emergency Alert: ${userName}`,
+          message: matchedResource
+            ? `Distress signal from ${userName} (${type.toUpperCase()}). Auto-assigned to ${matchedResource.name}.`
+            : `Distress signal from ${userName} (${type.toUpperCase()}). Pending resource assignment.`,
+          severity: severity || "critical",
+          userId,
+          metadata: {
+            alertId: alert.id,
+            resourceId: matchedResource?.id,
+            resourceName: matchedResource?.name,
+          },
+        },
+      })
+    } catch (e) {
+      console.warn("Notification skipped:", e)
+    }
 
     return NextResponse.json({
       success: true,
@@ -107,6 +176,12 @@ export async function POST(request: NextRequest) {
         status: alert.status,
         created_at: alert.createdAt.toISOString(),
       },
+      assignedResource: matchedResource ? {
+        id: matchedResource.id,
+        name: matchedResource.name,
+        type: matchedResource.type,
+        phone: matchedResource.phone,
+      } : null,
     }, { status: 201 })
   } catch (error) {
     console.error("[POST /api/sos]", error)
@@ -128,12 +203,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "contacts must be an array" }, { status: 400 })
     }
 
-    // Store contacts as JSON in qrCodeData field
     await db.user.update({
       where: { id: userId },
       data: {
         qrCodeData: JSON.stringify(contacts),
-        // Also update the primary emergency contact fields from priority-1 contact
         emergencyContact: contacts.find(c => c.priority === 1)?.name || contacts[0]?.name || null,
         emergencyPhone: contacts.find(c => c.priority === 1)?.phone || contacts[0]?.phone || null,
       },

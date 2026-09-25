@@ -95,8 +95,8 @@ export function OverviewTab({ stats, onNavigate }: { stats: Stats | null; onNavi
             </div>
             {onNavigate && (
               <Button
-                onClick={() => onNavigate("alerts")}
-                className="bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs px-4 py-2 shadow-md shrink-0"
+                onClick={() => onNavigate("tourist-alerts")}
+                className="bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs px-4 py-2 shadow-md shrink-0 cursor-pointer"
               >
                 Go to Alert Command Center
                 <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
@@ -129,8 +129,8 @@ export function OverviewTab({ stats, onNavigate }: { stats: Stats | null; onNavi
                 {onNavigate && (
                   <Button
                     size="sm"
-                    onClick={() => onNavigate("alerts")}
-                    className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 text-[11px] h-7 shrink-0"
+                    onClick={() => onNavigate("tourist-alerts")}
+                    className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 text-[11px] h-7 shrink-0 cursor-pointer"
                   >
                     Respond
                   </Button>
@@ -167,7 +167,7 @@ export function OverviewTab({ stats, onNavigate }: { stats: Stats | null; onNavi
             <span><strong>{stats.expiredDigiIds}</strong> Digi ID(s) have expired. Review status or initiate token renewal.</span>
           </div>
           {onNavigate && (
-            <Button size="sm" variant="outline" className="h-7 text-xs bg-white text-amber-800 border-amber-300" onClick={() => onNavigate("digi-ids")}>
+            <Button size="sm" variant="outline" className="h-7 text-xs bg-white text-amber-800 border-amber-300 cursor-pointer" onClick={() => onNavigate("list-ids")}>
               Review Digi IDs
             </Button>
           )}
@@ -189,7 +189,7 @@ export function OverviewTab({ stats, onNavigate }: { stats: Stats | null; onNavi
               </CardDescription>
             </div>
             {onNavigate && (
-              <Button size="sm" variant="ghost" className="text-xs text-blue-600 hover:text-blue-700" onClick={() => onNavigate("alerts")}>
+              <Button size="sm" variant="ghost" className="text-xs text-blue-600 hover:text-blue-700 cursor-pointer" onClick={() => onNavigate("tourist-alerts")}>
                 View All Alerts <ArrowRight className="h-3 w-3 ml-1" />
               </Button>
             )}

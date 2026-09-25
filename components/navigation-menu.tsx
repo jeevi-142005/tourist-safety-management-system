@@ -71,18 +71,24 @@ export function NavigationMenu() {
     getUser()
 
     // Listen for auth changes
-    const {
-      data: { subscription },
-    } = dbClient.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_OUT" || !session) {
-        setUser(null)
-      } else if (event === "SIGNED_IN" && session) {
-        await getUser()
-      }
-    })
+    let subscription: any = null
+    if (typeof (dbClient.auth as any)?.onAuthStateChange === "function") {
+      const res = (dbClient.auth as any).onAuthStateChange(async (event: any, session: any) => {
+        if (event === "SIGNED_OUT" || !session) {
+          setUser(null)
+        } else if (event === "SIGNED_IN" && session) {
+          await getUser()
+        }
+      })
+      subscription = res?.data?.subscription
+    }
 
-    return () => subscription.unsubscribe()
-  }, [Database])
+    return () => {
+      if (subscription?.unsubscribe) {
+        subscription.unsubscribe()
+      }
+    }
+  }, [])
 
   const handleSignOut = async () => {
     await dbClient.auth.signOut()

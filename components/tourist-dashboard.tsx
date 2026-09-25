@@ -29,7 +29,14 @@ import {
   ChevronRight,
   Globe,
   Settings,
-  AlertCircle
+  AlertCircle,
+  CloudRain,
+  Waves,
+  CheckCheck,
+  Loader2,
+  Sparkles,
+  Siren,
+  CheckCircle2
 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useLanguage } from "@/contexts/language-context"
@@ -206,6 +213,80 @@ export function TouristDashboard() {
   const [isOnline, setIsOnline] = useState(true)
   const [offlineAlertsCount, setOfflineAlertsCount] = useState(0)
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false)
+  const [respondingAlertId, setRespondingAlertId] = useState<string | null>(null)
+  const [assistanceFeedback, setAssistanceFeedback] = useState<string | null>(null)
+  const [isSimulatingHazard, setIsSimulatingHazard] = useState(false)
+
+  const handleRequestAssistance = async (alertId: string) => {
+    setRespondingAlertId(alertId)
+    try {
+      const res = await fetch("/api/alerts/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          alert_id: alertId,
+          action: "request_assistance",
+          location: currentLocation,
+        }),
+      })
+      if (res.ok) {
+        setAssistanceFeedback("🚨 Emergency Assistance Requested! Admin Command Center notified & emergency response units dispatched to your coordinates.")
+        await fetchAlerts()
+        setTimeout(() => setAssistanceFeedback(null), 7000)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setRespondingAlertId(null)
+    }
+  }
+
+  const handleConfirmSafe = async (alertId: string) => {
+    setRespondingAlertId(alertId)
+    try {
+      const res = await fetch("/api/alerts/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          alert_id: alertId,
+          action: "confirm_safe",
+        }),
+      })
+      if (res.ok) {
+        setAssistanceFeedback("✅ Safety confirmed! Command Center notified that you are safe.")
+        await fetchAlerts()
+        setTimeout(() => setAssistanceFeedback(null), 5000)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setRespondingAlertId(null)
+    }
+  }
+
+  const handleSimulateHazard = async (type: string = "heavy_rain") => {
+    setIsSimulatingHazard(true)
+    try {
+      const res = await fetch("/api/alerts/automated-hazard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user?.id,
+          hazardType: type,
+          lat: currentLocation?.lat || 11.0159,
+          lng: currentLocation?.lng || 76.9368,
+          locationName: locationName || "Coimbatore, Tamil Nadu",
+        }),
+      })
+      if (res.ok) {
+        await fetchAlerts()
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsSimulatingHazard(false)
+    }
+  }
 
   const fetchAlerts = async () => {
     if (!user) return
@@ -798,7 +879,151 @@ export function TouristDashboard() {
           {/* TAB 1: DASHBOARD VIEW */}
           {activeTab === "dashboard" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              
+
+              {/* Feedback toast banner after responding */}
+              {assistanceFeedback && (
+                <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl shadow-lg flex items-center justify-between text-xs animate-in slide-in-from-top-2">
+                  <div className="flex items-center space-x-2 font-medium">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>{assistanceFeedback}</span>
+                  </div>
+                  <button onClick={() => setAssistanceFeedback(null)} className="text-white/80 hover:text-white font-bold ml-2">✕</button>
+                </div>
+              )}
+
+              {/* AUTOMATED ABNORMAL HAZARD & DISASTER ALERT BANNER */}
+              {(() => {
+                const activeHazard = receivedAlerts.find(
+                  (a: any) =>
+                    (a.status === "active" || a.status === "assistance_requested") &&
+                    (a.device_info?.isAutomated ||
+                      a.device_info?.requiresAssistanceConfirmation ||
+                      ["weather_hazard", "disaster_alert", "abnormal_area", "anomaly_environmental"].includes(a.type))
+                )
+
+                if (!activeHazard) return null
+
+                const isAssistanceRequested = activeHazard.status === "assistance_requested" || activeHazard.device_info?.touristStatus === "assistance_requested"
+                const title = activeHazard.device_info?.title || (activeHazard.type?.replace(/_/g, " ").toUpperCase() + " ALERT")
+
+                return (
+                  <div
+                    className={`rounded-2xl p-5 border shadow-xl transition-all relative overflow-hidden animate-in fade-in ${
+                      isAssistanceRequested
+                        ? "bg-gradient-to-br from-red-950 via-rose-950 to-red-900 border-red-500 text-white shadow-red-950/40"
+                        : "bg-gradient-to-br from-amber-950/90 via-red-950/90 to-rose-950 border-amber-500/80 text-white shadow-rose-950/30"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                      <div className="flex items-start space-x-3.5 max-w-2xl">
+                        <div className={`p-3 rounded-xl shrink-0 ${isAssistanceRequested ? "bg-red-600 animate-pulse text-white" : "bg-amber-500/20 text-amber-400 border border-amber-500/30"}`}>
+                          {activeHazard.type === "weather_hazard" ? <CloudRain className="h-6 w-6" /> : <AlertTriangle className="h-6 w-6" />}
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider animate-pulse">
+                              {isAssistanceRequested ? "Emergency SOS En Route" : "Active Hazard In Your Sector"}
+                            </Badge>
+                            <span className="text-xs text-amber-300 font-semibold">{title}</span>
+                          </div>
+                          <p className="text-xs text-gray-200 leading-relaxed font-normal">
+                            {activeHazard.message}
+                          </p>
+
+                          {activeHazard.location_lat && activeHazard.location_lng && (
+                            <div className="flex items-center space-x-1.5 text-[11px] text-amber-200/90 pt-0.5">
+                              <MapPin className="h-3.5 w-3.5 text-amber-400" />
+                              <span>Detected at GPS: {Number(activeHazard.location_lat).toFixed(4)}, {Number(activeHazard.location_lng).toFixed(4)} ({locationName})</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Interactive Emergency Assistance & Safety Prompt */}
+                      <div className="shrink-0 w-full sm:w-auto pt-2 sm:pt-0">
+                        {isAssistanceRequested ? (
+                          <div className="bg-red-900/60 border border-red-400/50 rounded-xl p-3 text-center space-y-1">
+                            <div className="flex items-center justify-center space-x-1.5 text-xs font-bold text-red-200">
+                              <Siren className="h-4 w-4 text-white animate-spin" />
+                              <span>RESCUE DISPATCHED</span>
+                            </div>
+                            <p className="text-[10px] text-red-300">
+                              Admin command center has assigned emergency units to your coordinates. Stay in your safe shelter.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-black/30 border border-white/10 rounded-xl p-3 space-y-2 text-center">
+                            <p className="text-[11px] font-semibold text-amber-300">
+                              Do you need immediate emergency assistance?
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                disabled={respondingAlertId === activeHazard.id}
+                                onClick={() => handleRequestAssistance(activeHazard.id)}
+                                className="h-8 text-xs bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold shadow-md shadow-red-600/30 flex items-center gap-1.5"
+                              >
+                                {respondingAlertId === activeHazard.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Siren className="h-3.5 w-3.5" />
+                                )}
+                                Request Help / SOS
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={respondingAlertId === activeHazard.id}
+                                onClick={() => handleConfirmSafe(activeHazard.id)}
+                                className="h-8 text-xs bg-white/10 hover:bg-white/20 text-white border-white/20 font-semibold"
+                              >
+                                {respondingAlertId === activeHazard.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <CheckCircle className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+                                )}
+                                I Am Safe
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Simulation Quick Bar for Demoing Automated Hazard Feature */}
+              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-xl text-xs flex-wrap gap-2">
+                <div className="flex items-center space-x-2 text-blue-900 font-medium">
+                  <Sparkles className="h-4 w-4 text-blue-600" />
+                  <span>AI Hazard Engine: Real-time abnormal area & disaster monitoring is running in the background.</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isSimulatingHazard}
+                    onClick={() => handleSimulateHazard("heavy_rain")}
+                    className="h-7 text-[11px] font-semibold bg-white text-blue-700 border-blue-300 hover:bg-blue-100"
+                  >
+                    <CloudRain className="h-3 w-3 mr-1" />
+                    {isSimulatingHazard ? "Simulating..." : "Test Rain/Flood Alert"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isSimulatingHazard}
+                    onClick={() => handleSimulateHazard("abnormal_area")}
+                    className="h-7 text-[11px] font-semibold bg-white text-amber-700 border-amber-300 hover:bg-amber-100"
+                  >
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    Test Danger Zone
+                  </Button>
+                </div>
+              </div>
+
               {/* METRICS ROW */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 
@@ -1528,9 +1753,41 @@ export function TouristDashboard() {
                                   <span className="text-[10px] text-gray-400 font-mono">{Number(alert.location_lat).toFixed(4)}, {Number(alert.location_lng).toFixed(4)}</span>
                                 </div>
                               )}
-                              <div className="mt-2 flex items-center space-x-1.5">
-                                <div className={`h-1.5 w-1.5 rounded-full ${alert.status === "active" ? "bg-orange-400 animate-pulse" : "bg-emerald-400"}`} />
-                                <span className={`text-[9px] font-semibold uppercase ${alert.status === "active" ? "text-orange-500" : "text-emerald-500"}`}>{alert.status}</span>
+                              <div className="mt-2.5 pt-2 border-t border-gray-100 flex flex-col gap-1.5">
+                                {alert.status === "resolved" ? (
+                                  <div className="flex items-center justify-between text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-800 p-2 rounded-lg font-bold">
+                                    <span className="flex items-center gap-1.5">
+                                      <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                                      RESOLVED — Emergency Response Completed
+                                    </span>
+                                    {alert.device_info?.resolvedBy && (
+                                      <span className="text-[9px] text-emerald-700 font-medium">
+                                        Assisted by {alert.device_info.resolvedBy}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : alert.status === "in_progress" ? (
+                                  <div className="flex flex-col gap-1 text-[10px] bg-blue-50 border border-blue-200 text-blue-900 p-2 rounded-lg font-bold">
+                                    <span className="flex items-center gap-1.5 text-blue-700 animate-pulse">
+                                      <Navigation className="h-3.5 w-3.5 text-blue-600" />
+                                      EN ROUTE — Emergency Unit Dispatched to Your Location
+                                    </span>
+                                    {(alert.device_info?.assignedResourceName || alert.assignments?.[0]?.resourceName) && (
+                                      <span className="text-[10px] text-blue-800 font-semibold">
+                                        Dispatched Unit: {alert.device_info?.assignedResourceName || alert.assignments?.[0]?.resourceName}
+                                        {alert.device_info?.assignedResourcePhone || alert.assignments?.[0]?.resourcePhone ? ` (Hotline: ${alert.device_info?.assignedResourcePhone || alert.assignments?.[0]?.resourcePhone})` : ""}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-between text-[10px] bg-amber-50 border border-amber-200 text-amber-800 p-2 rounded-lg font-semibold">
+                                    <span className="flex items-center gap-1.5">
+                                      <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                                      PENDING DISPATCH — Command Center Alerted
+                                    </span>
+                                    <span className="text-[9px] text-amber-700">Connecting to nearest resource</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )
@@ -1598,6 +1855,39 @@ export function TouristDashboard() {
                                 <div className="flex items-center space-x-1 mt-2">
                                   <MapPin className="h-3 w-3 text-gray-400" />
                                   <span className="text-[10px] text-gray-400 font-mono">{Number(alert.location_lat).toFixed(4)}, {Number(alert.location_lng).toFixed(4)}</span>
+                                </div>
+                              )}
+                              {/* Interactive Assistance prompt if alert is active */}
+                              {alert.status === "assistance_requested" || alert.device_info?.touristStatus === "assistance_requested" ? (
+                                <div className="mt-2.5 p-2 bg-red-100 border border-red-200 rounded-lg flex items-center space-x-2 text-[10px] text-red-800 font-bold">
+                                  <Siren className="h-3.5 w-3.5 text-red-600 animate-spin shrink-0" />
+                                  <span>Emergency rescue dispatched to your location!</span>
+                                </div>
+                              ) : alert.status === "active" ? (
+                                <div className="mt-2.5 pt-2 border-t border-purple-100 flex items-center justify-between flex-wrap gap-2">
+                                  <span className="text-[10px] text-gray-500 font-medium">Do you need assistance?</span>
+                                  <div className="flex items-center space-x-1.5">
+                                    <button
+                                      disabled={respondingAlertId === alert.id}
+                                      onClick={() => handleRequestAssistance(alert.id)}
+                                      className="px-2.5 py-1 text-[10px] bg-red-600 hover:bg-red-700 text-white font-bold rounded-md shadow-xs flex items-center gap-1"
+                                    >
+                                      {respondingAlertId === alert.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Siren className="h-3 w-3" />}
+                                      Request SOS
+                                    </button>
+                                    <button
+                                      disabled={respondingAlertId === alert.id}
+                                      onClick={() => handleConfirmSafe(alert.id)}
+                                      className="px-2.5 py-1 text-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold border border-emerald-200 rounded-md"
+                                    >
+                                      {respondingAlertId === alert.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "I'm Safe"}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="mt-2 flex items-center space-x-1.5">
+                                  <CheckCircle className="h-3 w-3 text-emerald-500" />
+                                  <span className="text-[9px] font-semibold text-emerald-600 uppercase">Resolved / Safe</span>
                                 </div>
                               )}
                               <div className="mt-2 flex items-center space-x-1.5">

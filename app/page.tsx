@@ -13,6 +13,7 @@ import { Footer } from "@/components/footer"
 import { LoginSelection } from "@/components/login-selection"
 import AdminDashboardClient from "@/app/admin/admin-client"
 import { TouristDashboard } from "@/components/tourist-dashboard"
+import { ResourceDashboard, ResourceType } from "@/components/resource-dashboard"
 import { LoadingSpinner } from "@/components/loading-spinner"
 
 export default function HomePage() {
@@ -37,6 +38,11 @@ export default function HomePage() {
 
   if (user.role === "tourist") {
     return <TouristDashboard />
+  }
+
+  const resourceTypes = ["ambulance", "guide", "police", "fire", "hospital", "security"]
+  if (user.role && resourceTypes.includes(user.role)) {
+    return <ResourceDashboard resourceType={user.role as ResourceType} />
   }
 
   // Fallback to landing page

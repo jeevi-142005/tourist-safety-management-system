@@ -83,44 +83,52 @@ export function GeofenceAlertManager() {
   }
 
   const setupRealtimeSubscription = () => {
-    const channel = Database
-      .channel("geofence_alerts")
-      .on("broadcast", { event: "geofence_alert" }, (payload) => {
-        console.log("[v0] Received real-time geofence alert:", payload)
+    try {
+      const channel = (dbClient as any)
+        ?.channel("geofence_alerts")
+        ?.on("broadcast", { event: "geofence_alert" }, (payload: any) => {
+          console.log("[v0] Received real-time geofence alert:", payload)
 
-        // Add new alert to the list
-        const newAlert: GeofenceAlert = {
-          id: `temp-${Date.now()}`,
-          message: `Geofence alert: ${payload.payload.event_type} ${payload.payload.zone_name}`,
-          alert_type: "geofence",
-          severity: payload.payload.severity,
-          location_lat: 0,
-          location_lng: 0,
-          is_read: false,
-          is_acknowledged: false,
-          created_at: payload.payload.timestamp,
+          // Add new alert to the list
+          const newAlert: GeofenceAlert = {
+            id: `temp-${Date.now()}`,
+            message: `Geofence alert: ${payload?.payload?.event_type || "alert"} ${payload?.payload?.zone_name || ""}`,
+            alert_type: "geofence",
+            severity: payload?.payload?.severity || "medium",
+            location_lat: 0,
+            location_lng: 0,
+            is_read: false,
+            is_acknowledged: false,
+            created_at: payload?.payload?.timestamp || new Date().toISOString(),
+          }
+
+          setAlerts((prev) => [newAlert, ...prev])
+
+          // Play sound if enabled
+          if (settings.sound_alerts) {
+            playAlertSound(payload?.payload?.severity || "medium")
+          }
+
+          // Show browser notification if enabled
+          if (settings.push_notifications && "Notification" in window && Notification.permission === "granted") {
+            new Notification(`Geofence Alert: ${payload?.payload?.zone_name || "Alert"}`, {
+              body: `You have ${payload?.payload?.event_type || "entered"} a ${payload?.payload?.zone_type || "monitored"} zone`,
+              icon: "/favicon.ico",
+              tag: `geofence-${payload?.payload?.zone_name || "alert"}`,
+            })
+          }
+        })
+        ?.subscribe?.()
+
+      return () => {
+        try {
+          (dbClient as any)?.removeChannel?.(channel)
+        } catch {
+          // ignore
         }
-
-        setAlerts((prev) => [newAlert, ...prev])
-
-        // Play sound if enabled
-        if (settings.sound_alerts) {
-          playAlertSound(payload.payload.severity)
-        }
-
-        // Show browser notification if enabled
-        if (settings.push_notifications && "Notification" in window && Notification.permission === "granted") {
-          new Notification(`Geofence Alert: ${payload.payload.zone_name}`, {
-            body: `You have ${payload.payload.event_type} a ${payload.payload.zone_type} zone`,
-            icon: "/favicon.ico",
-            tag: `geofence-${payload.payload.zone_name}`,
-          })
-        }
-      })
-      .subscribe()
-
-    return () => {
-      dbClient.removeChannel(channel)
+      }
+    } catch {
+      return () => {}
     }
   }
 

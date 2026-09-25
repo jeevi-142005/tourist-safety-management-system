@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
       summary: {
         activeTourists: activeTouristsCount || 0,
         activeAlerts: activeAlerts?.length || 0,
-        criticalAlerts: activeAlerts?.filter(alert => alert.severity === 'critical').length || 0,
+        criticalAlerts: activeAlerts?.filter((alert: any) => alert.severity === 'critical').length || 0,
         recentEFIRs: recentEFIRs?.length || 0
       },
       alerts: activeAlerts || [],

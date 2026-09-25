@@ -34,14 +34,16 @@ Provide responses that:
 
 Keep responses concise but comprehensive (2-4 paragraphs max).`
 
+    const modelMessages = await convertToModelMessages(messages)
+
     const result = streamText({
       model: google("gemini-2.5-flash"),
-      messages: [{ role: "system", content: systemPrompt }, ...convertToModelMessages(messages)],
+      messages: [{ role: "system", content: systemPrompt }, ...modelMessages],
       maxOutputTokens: 800,
       temperature: 0.7,
     })
 
-    return result.toDataStreamResponse()
+    return result.toTextStreamResponse()
   } catch (error) {
     console.error("AI streaming error:", error)
 

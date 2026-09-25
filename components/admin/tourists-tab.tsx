@@ -56,16 +56,21 @@ export function TouristsTab() {
   const handleSendAlert = async (tourist: Tourist) => {
     setSendingAlert(tourist.id)
     try {
-      await fetch("/api/alerts/user", {
+      const res = await fetch("/api/admin/broadcast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: tourist.id,
+          targetUserId: tourist.id,
           type: "admin_notification",
-          message: `Safety check from Admin. Please confirm your current status.`,
+          title: "Safety Status Verification",
+          message: `Official Safety Check from Admin Command Center: Please confirm your current safety status. Do you require emergency assistance?`,
           severity: "medium",
+          requiresAssistancePrompt: true,
         }),
       })
+      if (res.ok) {
+        alert(`Safety check alert dispatched to ${tourist.name || tourist.email}`)
+      }
     } catch (e) {
       console.error(e)
     } finally {

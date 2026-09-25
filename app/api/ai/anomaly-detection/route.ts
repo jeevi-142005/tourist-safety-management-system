@@ -105,21 +105,33 @@ export async function POST(request: NextRequest) {
           },
         })
 
+        // Query available emergency resource for auto-triage (reducing manual admin work)
+        const matchingResource = await db.emergencyResource.findFirst({
+          where: { isAvailable: true },
+        })
+
         // 2. Create EmergencyAlert in Prisma (for admin dashboard)
         const emergencyAlert = await db.emergencyAlert.create({
           data: {
             userId: userId,
             userName: userName,
-            type: anomaly.type || "anomaly",
+            type: anomaly.type || "anomaly_detected",
             message: anomaly.description,
             severity: anomaly.severity,
             locationLat: anomaly.location?.lat || null,
             locationLng: anomaly.location?.lng || null,
             status: "active",
             deviceInfo: {
+              isAutomated: true,
+              title: `AI Anomaly: ${anomaly.type?.replace(/_/g, " ").toUpperCase()}`,
               anomaly_type: anomaly.type,
               recommendation: anomaly.recommendation,
               ai_detected: true,
+              requiresAssistanceConfirmation: true,
+              assistancePrompt: "AI detected an abnormal pattern or hazard in your area. Do you require emergency assistance?",
+              touristStatus: "awaiting_response",
+              suggestedResourceId: matchingResource?.id || null,
+              suggestedResourceName: matchingResource?.name || null,
             },
           },
         })
@@ -128,13 +140,15 @@ export async function POST(request: NextRequest) {
         await db.adminNotification.create({
           data: {
             type: "anomaly_detected",
-            title: `⚠️ AI Anomaly: ${anomaly.type.replace(/_/g, " ").toUpperCase()} — ${userName}`,
-            message: `${anomaly.description}. Recommendation: ${anomaly.recommendation}`,
+            title: `⚠️ AI Anomaly: ${anomaly.type?.replace(/_/g, " ").toUpperCase()} — ${userName}`,
+            message: `${anomaly.description}. Recommendation: ${anomaly.recommendation}. Auto-suggested Unit: ${matchingResource?.name || "Pending Dispatch"}.`,
             severity: anomaly.severity,
             userId: userId,
             metadata: {
               alertId: emergencyAlert.id,
               anomalyType: anomaly.type,
+              suggestedResourceId: matchingResource?.id,
+              suggestedResourceName: matchingResource?.name,
               location: anomaly.location,
             },
           },

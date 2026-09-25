@@ -81,8 +81,8 @@ export async function GET(request: NextRequest) {
       anomalies,
       summary: {
         totalNotifications: notifications.length,
-        criticalAlerts: userAlerts.filter((alert) => alert.severity === "critical").length,
-        highAlerts: userAlerts.filter((alert) => alert.severity === "high").length,
+        criticalAlerts: userAlerts.filter((alert: any) => alert.severity === "critical").length,
+        highAlerts: userAlerts.filter((alert: any) => alert.severity === "high").length,
         unresolvedAnomalies: anomalies.length,
       },
     })
