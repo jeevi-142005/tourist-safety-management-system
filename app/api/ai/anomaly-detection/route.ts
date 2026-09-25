@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/db-client/server"
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { db } from "@/lib/db"
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "mock-key")
 
@@ -80,9 +81,17 @@ export async function POST(request: NextRequest) {
       aiAnalysis = performFallbackAnomalyDetection(recentLocations, plannedRoutes)
     }
 
-    // Create alerts for high-severity anomalies
+    // Get the user's name for notifications
+    let userName = "Unknown Tourist"
+    try {
+      const user = await db.user.findUnique({ where: { id: userId }, select: { name: true } })
+      if (user?.name) userName = user.name
+    } catch { /* ignore */ }
+
+    // Create alerts AND admin notifications for high-severity anomalies
     for (const anomaly of aiAnalysis.anomalies) {
       if (anomaly.severity === "high" || anomaly.severity === "critical") {
+        // 1. Create alert in Supabase (legacy)
         await dbClient.from("alerts").insert({
           user_id: userId,
           alert_type: "anomaly",
@@ -93,6 +102,41 @@ export async function POST(request: NextRequest) {
             anomaly_type: anomaly.type,
             recommendation: anomaly.recommendation,
             detected_at: new Date().toISOString(),
+          },
+        })
+
+        // 2. Create EmergencyAlert in Prisma (for admin dashboard)
+        const emergencyAlert = await db.emergencyAlert.create({
+          data: {
+            userId: userId,
+            userName: userName,
+            type: anomaly.type || "anomaly",
+            message: anomaly.description,
+            severity: anomaly.severity,
+            locationLat: anomaly.location?.lat || null,
+            locationLng: anomaly.location?.lng || null,
+            status: "active",
+            deviceInfo: {
+              anomaly_type: anomaly.type,
+              recommendation: anomaly.recommendation,
+              ai_detected: true,
+            },
+          },
+        })
+
+        // 3. Create AdminNotification so admin sees it instantly
+        await db.adminNotification.create({
+          data: {
+            type: "anomaly_detected",
+            title: `⚠️ AI Anomaly: ${anomaly.type.replace(/_/g, " ").toUpperCase()} — ${userName}`,
+            message: `${anomaly.description}. Recommendation: ${anomaly.recommendation}`,
+            severity: anomaly.severity,
+            userId: userId,
+            metadata: {
+              alertId: emergencyAlert.id,
+              anomalyType: anomaly.type,
+              location: anomaly.location,
+            },
           },
         })
       }
@@ -109,6 +153,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to detect anomalies" }, { status: 500 })
   }
 }
+
 
 function performFallbackAnomalyDetection(locations: any[], routes: any[]) {
   const anomalies = []

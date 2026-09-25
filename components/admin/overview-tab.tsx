@@ -60,8 +60,8 @@ export function OverviewTab({ stats, onNavigate }: { stats: Stats | null; onNavi
     )
   }
 
-  const urgentAlerts = stats.recentAlerts.filter(
-    (a) => a.status === "active" || a.severity === "critical" || a.severity === "high"
+  const urgentAlerts = (stats.recentAlerts || []).filter(
+    (a: any) => a.status === "active" || a.severity === "critical" || a.severity === "high"
   )
 
   const cards = [
@@ -195,14 +195,14 @@ export function OverviewTab({ stats, onNavigate }: { stats: Stats | null; onNavi
             )}
           </CardHeader>
           <CardContent className="p-4">
-            {stats.recentAlerts.length === 0 ? (
+            {(stats.recentAlerts || []).length === 0 ? (
               <div className="text-center py-10 text-slate-400 space-y-2">
                 <CheckCircle className="h-8 w-8 mx-auto text-emerald-500/60" />
                 <p className="text-xs font-medium">All clear! No active alerts or safety warnings.</p>
               </div>
             ) : (
               <div className="space-y-2.5">
-                {stats.recentAlerts.map((alert) => (
+                {(stats.recentAlerts || []).map((alert) => (
                   <div
                     key={alert.id}
                     className="flex items-start justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-100/60 transition-colors"

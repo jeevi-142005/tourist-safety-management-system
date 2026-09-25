@@ -64,19 +64,10 @@ export default function AdminDashboardClient() {
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const [touristsResponse, statsResponse] = await Promise.all([
-          fetch("/api/admin/tourists"),
-          fetch("/api/admin/dashboard-stats").catch(() => fetch("/api/admin/stats")), // Fallback if route changed
-      ])
-
-      if (touristsResponse.ok) {
-          const touristsData = await touristsResponse.json()
-          setTourists(touristsData.tourists)
-      }
-
-      if (statsResponse.ok) {
-          const statsData = await statsResponse.json()
-          setStats(statsData)
+      const res = await fetch("/api/admin/stats")
+      if (res.ok) {
+        const data = await res.json()
+        setStats(data)
       }
     } catch (error) {
         console.error("Error fetching dashboard data:", error)
